@@ -83,6 +83,26 @@ e_R = \frac{1}{2}(R_d^T R - R^T R_d)^\vee
 \tau_j = K_{p,j}\,(q_{\text{des}} - q_j) + K_{d,j}\,(\dot{q}_{\text{des}} - \dot{q}_j) + G_j(q)
 ```
 
+#### SDRE (State-Dependent Riccati Equation) 모드
+
+고정 게인 PID/PD의 한계를 극복하기 위해 **계층적 SDRE** 제어기를 제공합니다.
+
+**풀시스템 SDRE의 문제:** 부족구동(underactuated) 시스템(8-DOF, 6 입력)에서는 풀시스템 상태의존 행렬 $A(x), B(x)$로 CARE를 풀면 controllability rank가 12/16으로, 해가 존재하지 않습니다.
+
+**해결: 계층적 SDRE** — 외부 루프는 위치 PID를 유지하고, 내부 루프(자세 3-DOF + 관절 2-DOF = 5-DOF)에 SDRE를 적용합니다:
+
+```math
+A(x)\,\delta x + B(x)\,u = 0 \;\;\Rightarrow\;\; \text{CARE} \;\;\Rightarrow\;\; K(x) = R^{-1} B(x)^T P(x)
+```
+
+매 제어 주기마다 C++ 엔진에서 결합 질량행렬 $M_{rr}(q)$를 추출하여 상태의존 행렬을 구성하고, CARE를 풀어 최적 게인을 재계산합니다. 이를 통해 매니퓰레이터 구동에 따른 관성 변화를 실시간으로 반영합니다.
+
+**SDRE 모드 사용법:**
+
+```python
+runner = SimulationRunner(config, controller_mode='sdre')
+```
+
 ### 자동 게인 최적화 (Gain Optimizer)
 
 수동 튜닝 없이 **수학적으로 최적의 PID 게인**을 자동 산출하는 두 가지 방법을 제공합니다:
@@ -227,9 +247,12 @@ Position RMSE, 제어 입력 등의 성능 지표가 콘솔에 출력됩니다.
 
 ```bash
 python examples/02_position_tracking.py
+
+# SDRE 모드로 실행
+python examples/02_position_tracking.py --sdre
 ```
 
-x-y 평면에서 원형 경로를 추적하며 위치 제어기의 추적 성능을 테스트합니다.
+x-y 평면에서 원형 경로를 추적하며 위치 제어기의 추적 성능을 테스트합니다. `--sdre` 옵션 또는 `controller_mode='sdre'`로 SDRE 제어기를 사용할 수 있습니다.
 
 ### Example 03: Arm Motion During Hover
 
@@ -237,6 +260,9 @@ x-y 평면에서 원형 경로를 추적하며 위치 제어기의 추적 성능
 
 ```bash
 python examples/03_arm_motion.py
+
+# SDRE 모드로 실행
+python examples/03_arm_motion.py --sdre
 ```
 
 3단계 arm sweep을 수행합니다:
@@ -302,11 +328,13 @@ x-y 평면에서 원형 경로를 추적하며 위치 제어기의 동적 추종
 
 **파라미터:** $R = 0.3$ m, $\omega = 0.3\pi$ rad/s, altitude $= 1.0$ m
 
+#### PID 결과
+
 ![Circle Position](docs/images/circle_position.png)
 
 ![Circle 3D Trajectory](docs/images/circle_trajectory_3d.png)
 
-**성능 요약:**
+**PID 성능 요약:**
 
 | 지표 | x | y | z |
 |------|---|---|---|
@@ -315,6 +343,23 @@ x-y 평면에서 원형 경로를 추적하며 위치 제어기의 동적 추종
 **분석:**
 - **x-y 평면 RMSE ~1.4 cm** — PID 제어기의 위상 지연(phase lag)에 기인합니다. 원심 가속도 $a = R\omega^2 \approx 0.44$ m/s² 를 feedforward로 보상하지만, 제어 대역폭($\sim 0.3$ Hz) 대비 궤적 주파수($\sim 0.15$ Hz)가 가까워 추종 오차가 발생합니다.
 - **z-축 RMSE < 1 mm** — 수평면 운동에 의한 부족구동(underactuation) 결합 효과가 고도 유지에 미치는 영향이 미미함을 보여줍니다.
+
+#### SDRE 결과
+
+![SDRE Circle Position](docs/images/sdre_circle_position.png)
+
+![SDRE Circle 3D Trajectory](docs/images/sdre_circle_trajectory_3d.png)
+
+#### SDRE vs PID 비교
+
+| 지표 | SDRE | PID | 개선 |
+|------|------|-----|------|
+| x RMSE | 0.544 cm | 1.447 cm | 62%↓ |
+| y RMSE | 0.536 cm | 1.238 cm | 57%↓ |
+| z RMSE | 0.012 cm | 0.075 cm | 84%↓ |
+| **Total RMSE** | **0.762 cm** | **1.907 cm** | **60%↓** |
+
+**분석:** SDRE는 매 제어 주기마다 결합 질량행렬 $M_{rr}(q)$에서 최적 자세 게인을 재계산하므로, 고정 게인 PID의 위상 지연(phase lag) 문제를 해결합니다. 특히 z축 RMSE 84% 개선은 자세-추력 결합의 최적 보상 덕분입니다.
 
 ---
 
@@ -327,6 +372,8 @@ x-y 평면에서 원형 경로를 추적하며 위치 제어기의 동적 추종
 - Phase 2: $q_1$: $0 \to 90\degree$ (azimuth)
 - Phase 3: 두 관절 원위치 복귀
 
+#### PID 결과
+
 ![Arm Motion Position](docs/images/arm_motion_position.png)
 
 ![Arm Motion Attitude](docs/images/arm_motion_attitude.png)
@@ -337,7 +384,7 @@ x-y 평면에서 원형 경로를 추적하며 위치 제어기의 동적 추종
 
 ![Arm Motion Animation](docs/animations/arm_motion.gif)
 
-**성능 요약:**
+**PID 성능 요약:**
 
 | 지표 | 값 |
 |------|-----|
@@ -351,6 +398,31 @@ x-y 평면에서 원형 경로를 추적하며 위치 제어기의 동적 추종
 - **자세 오차 1.93°** — SO(3) 기하학적 제어기의 강인성으로 매니퓰레이터 반토크에도 불구하고 빠르게 수렴합니다.
 - **모터 추력 불균형** — 매니퓰레이터 구동에 의한 반토크를 보상하기 위해 차동 추력(differential thrust)이 발생하며, 최대 추력이 호버 대비 57% 증가합니다.
 - **중력 보상의 중요성** — 중력 보상이 없으면 elevation 관절에 정적 토크 $\tau_g \approx m_{\text{arm}} g\, l_{\text{com}} \sin(q_2) \approx 1.275$ N·m 이 작용하여 약 3.7° 편향이 발생합니다.
+
+#### SDRE 결과
+
+![SDRE Arm Motion Position](docs/images/sdre_arm_motion_position.png)
+
+![SDRE Arm Motion Attitude](docs/images/sdre_arm_motion_attitude.png)
+
+![SDRE Arm Motion Joints](docs/images/sdre_arm_motion_joints.png)
+
+![SDRE Arm Motion Controls](docs/images/sdre_arm_motion_controls.png)
+
+![SDRE Arm Motion Animation](docs/animations/sdre_arm_motion.gif)
+
+#### SDRE vs PID 비교
+
+| 지표 | SDRE | PID | 개선 |
+|------|------|-----|------|
+| Position x RMSE | 3.36 cm | 8.73 cm | 61%↓ |
+| Position y RMSE | 3.50 cm | 8.71 cm | 60%↓ |
+| Position z RMSE | 0.14 cm | 0.58 cm | 76%↓ |
+| Joint $q_1$ RMSE | 1.19° | 1.39° | 14%↓ |
+| Joint $q_2$ RMSE | 0.69° | 0.74° | 7%↓ |
+| Max attitude error | 1.39° | 1.93° | 28%↓ |
+
+**분석:** SDRE가 모든 지표에서 PID를 상회합니다. 위치 RMSE 61% 개선의 핵심은 매니퓰레이터 구동 시 변화하는 결합 관성 $M_{rr}(q_{\text{joint}})$을 실시간으로 반영하여 자세 보상이 정확해지기 때문입니다. CoM 이동에 의한 외란이 더 빠르게 보상됩니다.
 
 ---
 

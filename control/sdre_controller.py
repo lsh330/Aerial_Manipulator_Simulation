@@ -44,17 +44,17 @@ class SDREController:
         # State: [e_att(3), e_joint(2), e_omega(3), e_joint_vel(2)] = 10
         if Q_inner is None:
             Q_inner = np.diag([
-                400, 400, 100,    # attitude error (roll, pitch, yaw)
-                1000, 1000,       # joint error
-                4, 4, 2,          # angular velocity error
-                10, 10,           # joint velocity error
+                200, 200, 67,      # attitude error (roll, pitch, yaw)
+                3000, 3000,        # joint error — high for precise tracking
+                2, 2, 1,           # angular velocity error
+                5, 5,              # joint velocity error
             ])
         self._Q = Q_inner
 
         if R_inner is None:
             R_inner = np.diag([
-                0.01, 0.01, 0.01,   # body torques
-                0.04, 0.04,          # joint torques
+                0.5, 0.5, 0.5,     # body torques
+                0.05, 0.05,        # joint torques — low for aggressive tracking
             ])
         self._R = R_inner
 
