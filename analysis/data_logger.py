@@ -1,8 +1,6 @@
 """Real-time data logging during simulation (Observer pattern)."""
 
 import numpy as np
-import pandas as pd
-import h5py
 from pathlib import Path
 from models.state import STATE_DIM
 
@@ -71,8 +69,9 @@ class DataLogger:
             return self._references[key][:self._count]
         return None
 
-    def to_dataframe(self) -> pd.DataFrame:
+    def to_dataframe(self):
         """Convert logged data to a pandas DataFrame."""
+        import pandas as pd
         cols = ["t"]
         data = [self.get_time()]
 
@@ -94,6 +93,7 @@ class DataLogger:
         return pd.DataFrame(dict(zip(cols, data)))
 
     def save_hdf5(self, path: str | Path):
+        import h5py
         path = Path(path)
         with h5py.File(path, "w") as f:
             f.create_dataset("time", data=self.get_time())
