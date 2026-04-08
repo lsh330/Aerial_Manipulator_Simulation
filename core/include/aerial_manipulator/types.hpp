@@ -39,36 +39,38 @@ namespace idx {
 }
 
 // ── Physical parameters ──
+
 struct QuadrotorParams {
-    double mass;
-    Mat3 inertia;
-    double arm_length;
-    double thrust_coeff;
-    double torque_coeff;
-    double drag_coeff;
-    double motor_time_constant;
-    double max_motor_speed;
+    double mass;                 ///< [kg] quadrotor body mass (excluding manipulator)
+    Mat3 inertia;                ///< [kg·m²] body-frame inertia tensor (3×3 diagonal)
+    double arm_length;           ///< [m] motor-to-center distance
+    double thrust_coeff;         ///< [N/(rad/s)²] rotor thrust coefficient k_f: f_i = k_f * ω_i²
+    double torque_coeff;         ///< [N·m/(rad/s)²] rotor torque coefficient k_τ: τ_i = k_τ * ω_i²
+    double drag_coeff;           ///< [N·s/m] isotropic translational drag coefficient
+    double motor_time_constant;  ///< [s] first-order motor response time constant τ_m
+    double max_motor_speed;      ///< [rad/s] motor angular speed saturation ω_max
 };
 
 struct LinkParams {
-    double mass;
-    double length;
-    double com_distance;
-    Mat3 inertia;
+    double mass;          ///< [kg] link mass
+    double length;        ///< [m] total link length
+    double com_distance;  ///< [m] distance from proximal joint to center of mass
+    Mat3 inertia;         ///< [kg·m²] link-frame inertia tensor (3×3 diagonal, principal axes)
 };
 
 struct ManipulatorParams {
-    Vec3 attachment_offset;
-    LinkParams link1;
-    LinkParams link2;
-    Vec2 joint_lower_limit;
-    Vec2 joint_upper_limit;
-    double max_joint_torque;
+    Vec3 attachment_offset;    ///< [m] joint1 position in body frame relative to quadrotor COM
+    LinkParams link1;          ///< First link (azimuth-elevation gimbal)
+    LinkParams link2;          ///< Second link (extends along link1 direction, no elbow)
+    Vec2 joint_lower_limit;    ///< [rad] lower joint limits [q1_min, q2_min]
+    Vec2 joint_upper_limit;    ///< [rad] upper joint limits [q1_max, q2_max]
+    double max_joint_torque;   ///< [N·m] maximum torque per joint actuator
 };
 
 struct EnvironmentParams {
-    double gravity = 9.81;
-    double air_density = 1.225;
+    double gravity = 9.81;      ///< [m/s²] gravitational acceleration magnitude
+    double air_density = 1.225; ///< [kg/m³] air density at sea level
+    Vec3 wind_velocity = Vec3::Zero();  ///< [m/s] constant wind velocity in world frame (NED→ENU)
 };
 
 }  // namespace aerial_manipulator

@@ -9,6 +9,14 @@ This is the key test for:
 - Coupled dynamics: arm motion disturbs quadrotor attitude
 - Reaction compensation: attitude controller rejects manipulator torques
 - Position maintenance: CoM shift during arm motion
+
+Expected Output (approximate)::
+
+    Position RMSE [m]: ~0.015 (15 mm drift during arm motion)
+    Joint tracking RMSE [rad]: ~0.003
+    Max attitude perturbation [deg]: ~2.5
+
+Note: Requires built _core module. Run ``bash scripts/build.sh`` first.
 """
 
 import sys

@@ -29,3 +29,14 @@ output:
   image_dpi: 300
   animation_format: "gif"     # "gif" or "mp4"
   animation_fps: 30
+
+# Wind disturbance (optional, defaults to zero)
+wind:
+  velocity: [0.0, 0.0, 0.0]  # [m/s] constant wind in world frame [x, y, z]
+
+# Contact model (optional, disabled by default)
+contact:
+  enabled: false
+  stiffness: 1000.0           # [N/m] contact spring stiffness
+  damping: 50.0               # [N·s/m] contact damper coefficient
+  surface_z: 0.0              # [m] contact surface height in world frame

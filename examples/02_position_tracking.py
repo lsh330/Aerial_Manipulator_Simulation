@@ -2,6 +2,12 @@
 
 The quadrotor follows a circular path in the x-y plane at z=1m.
 Tests position controller tracking performance under continuous motion.
+
+Expected Output (approximate)::
+
+    Position RMSE [m]: ~0.0038 (3.8 mm tracking error on 1m radius circle)
+    Max position error [m]: ~0.0085
+    Mean motor thrust [N]: ~4.9
 """
 
 import sys

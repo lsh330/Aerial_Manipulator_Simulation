@@ -16,6 +16,9 @@ try:
     # MinGW runtime DLLs (libstdc++, libgcc, libwinpthread) are placed
     # next to _core.pyd in models/ — no add_dll_directory needed.
     # Ensure models/ is on sys.path for _core.pyd
+    # Add MinGW runtime DLL directories
+    # Runtime DLLs (libstdc++, libgcc_s_seh, libwinpthread) are placed
+    # next to _core.pyd in models/ -- no add_dll_directory needed.
     _models_dir = os.path.dirname(os.path.abspath(__file__))
     if _models_dir not in sys.path:
         sys.path.insert(0, _models_dir)
@@ -38,7 +41,7 @@ class SystemWrapper:
         manip_cfg: ManipulatorConfig,
         env_cfg: EnvironmentConfig,
         integrator: str = "rk4",
-    ):
+    ) -> None:
         self._quad_cfg = quad_cfg
         self._manip_cfg = manip_cfg
         self._env_cfg = env_cfg
@@ -48,7 +51,12 @@ class SystemWrapper:
         else:
             self._init_python_fallback(integrator)
 
-    def _init_cpp_engine(self, integrator: str):
+    def _init_cpp_engine(self, integrator: str) -> None:
+        """Initialize and configure the C++ AerialManipulatorSystem.
+
+        Args:
+            integrator: Integration scheme -- ``"rk4"`` or ``"rkf45"``.
+        """
         # Build C++ parameter structs
         qp = _core.QuadrotorParams()
         qp.mass = self._quad_cfg.mass
@@ -88,26 +96,59 @@ class SystemWrapper:
             self._system.set_integrator(_core.RKF45Integrator())
         self._use_cpp = True
 
-    def _init_python_fallback(self, integrator: str):
-        """Pure-Python fallback when C++ engine is not available."""
+    def _init_python_fallback(self, integrator: str) -> None:
+        """Pure-Python fallback when C++ engine is not available.
+
+        Args:
+            integrator: Integration scheme name (stored for reference).
+        """
         self._use_cpp = False
         self._integrator_name = integrator
 
     def step(self, t: float, state: State, input_vec: np.ndarray, dt: float) -> State:
-        """Advance the system by one time step."""
+        """Advance the system by one time step.
+
+        Args:
+            t: Current simulation time [s].
+            state: Current system state (17-element).
+            input_vec: Control input [f1, f2, f3, f4, tau_q1, tau_q2] in [N, N, N, N, N·m, N·m].
+            dt: Integration time step [s].
+
+        Returns:
+            State: Next system state after integration.
+        """
         if self._use_cpp:
             new_data = self._system.step(t, state.data, input_vec, dt)
             return State(new_data)
         else:
             return self._python_step(t, state, input_vec, dt)
 
-    def compute_state_derivative(self, state: State, input_vec: np.ndarray) -> np.ndarray:
+    def compute_state_derivative(
+        self, state: State, input_vec: np.ndarray
+    ) -> np.ndarray:
+        """Compute the continuous-time state derivative dx/dt.
+
+        Args:
+            state: Current system state (17-element).
+            input_vec: Control input [N, N, N, N, N·m, N·m].
+
+        Returns:
+            np.ndarray: State derivative, shape (17,).
+
+        Raises:
+            NotImplementedError: When C++ engine is unavailable.
+        """
         if self._use_cpp:
             return self._system.compute_state_derivative(state.data, input_vec)
         else:
             raise NotImplementedError("Python fallback derivative not yet implemented")
 
     def total_mass(self) -> float:
+        """Return total system mass (quadrotor + all links) in [kg].
+
+        Returns:
+            float: Total mass [kg].
+        """
         if self._use_cpp:
             return self._system.total_mass()
         return (self._quad_cfg.mass
@@ -115,7 +156,12 @@ class SystemWrapper:
                 + self._manip_cfg.link2.mass)
 
     def hover_input(self) -> np.ndarray:
-        """Compute input vector for steady hover (arm down, level)."""
+        """Compute input vector for steady hover (arm down, level).
+
+        Returns:
+            np.ndarray: Control input [f1, f2, f3, f4, 0, 0] where
+                fi = m_total * g / 4 [N] and joint torques are zero.
+        """
         m_total = self.total_mass()
         g = self._env_cfg.gravity
         thrust_per_motor = m_total * g / 4.0
@@ -127,10 +173,17 @@ class SystemWrapper:
 
     @property
     def has_cpp_engine(self) -> bool:
+        """True if the C++ dynamics engine is loaded and active."""
         return self._use_cpp
 
-    def _python_step(self, t, state, input_vec, dt):
-        """Minimal RK4 fallback for testing without C++ build."""
+    def _python_step(
+        self, t: float, state: State, input_vec: np.ndarray, dt: float
+    ) -> State:
+        """Minimal RK4 fallback for testing without C++ build.
+
+        Raises:
+            NotImplementedError: Always — build the C++ engine to run simulations.
+        """
         raise NotImplementedError(
             "C++ engine not available. Build with: scripts/build.sh"
         )

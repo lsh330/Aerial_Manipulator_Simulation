@@ -30,12 +30,20 @@ StateVector AerialManipulatorSystem::normalize_quaternion(const StateVector& sta
     if (norm > 1e-10) {
         q /= norm;
     }
+    // If norm < 1e-10 the quaternion is effectively zero; leave it as-is so
+    // the caller can detect the degenerate condition rather than silently
+    // introducing an arbitrary rotation.
     return s;
 }
 
 Mat3 AerialManipulatorSystem::quaternion_to_rotation(const StateVector& state) {
     Quat q(state(idx::QUAT), state(idx::QUAT+1),
            state(idx::QUAT+2), state(idx::QUAT+3));
+    double norm = q.norm();
+    if (norm < 1e-10) {
+        // Zero quaternion: return identity rotation instead of producing NaN.
+        return Mat3::Identity();
+    }
     q.normalize();
     return q.toRotationMatrix();
 }
@@ -463,15 +471,25 @@ AerialManipulatorSystem::compute_input_matrix(const StateVector& state) const {
 StateVector AerialManipulatorSystem::compute_state_derivative(
     const StateVector& state, const InputVector& input) const
 {
+    // Ensure quaternion is normalised before computing derivatives.
+    // This guards each RK sub-step against gradual norm drift without
+    // requiring explicit normalisation inside the integrator.
+    StateVector s = state;
+    Eigen::Map<Vec4> q_map(s.data() + idx::QUAT);
+    double qnorm = q_map.norm();
+    if (qnorm > 1e-10) {
+        q_map /= qnorm;
+    }
+
     StateVector x_dot = StateVector::Zero();
 
-    // Extract state components
-    const Vec3 vel(state(idx::VEL), state(idx::VEL+1), state(idx::VEL+2));
-    const Quat quat(state(idx::QUAT), state(idx::QUAT+1),
-                    state(idx::QUAT+2), state(idx::QUAT+3));
-    const Vec3 omega(state(idx::ANG_VEL), state(idx::ANG_VEL+1), state(idx::ANG_VEL+2));
-    const Vec2 q_joint(state(idx::JOINT_POS), state(idx::JOINT_POS+1));
-    const Vec2 q_dot_joint(state(idx::JOINT_VEL), state(idx::JOINT_VEL+1));
+    // Extract state components (use normalised s)
+    const Vec3 vel(s(idx::VEL), s(idx::VEL+1), s(idx::VEL+2));
+    const Quat quat(s(idx::QUAT), s(idx::QUAT+1),
+                    s(idx::QUAT+2), s(idx::QUAT+3));
+    const Vec3 omega(s(idx::ANG_VEL), s(idx::ANG_VEL+1), s(idx::ANG_VEL+2));
+    const Vec2 q_joint(s(idx::JOINT_POS), s(idx::JOINT_POS+1));
+    const Vec2 q_dot_joint(s(idx::JOINT_VEL), s(idx::JOINT_VEL+1));
 
     // 1. Position derivative = velocity
     x_dot(idx::POS)   = vel(0);
@@ -491,13 +509,13 @@ StateVector AerialManipulatorSystem::compute_state_derivative(
 
     // 4. Solve M(q) * q_ddot = B*u - C(q,q_dot)*q_dot - G(q) + F_drag
     //    for q_ddot = [v_dot(3), omega_dot(3), q_ddot_joint(2)]
-    auto M = compute_mass_matrix(state);
-    auto C_qdot = compute_coriolis_vector(state);
-    auto G = compute_gravity_vector(state);
-    auto B = compute_input_matrix(state);
+    auto M = compute_mass_matrix(s);
+    auto C_qdot = compute_coriolis_vector(s);
+    auto G = compute_gravity_vector(s);
+    auto B = compute_input_matrix(s);
 
     // Translational aerodynamic drag (body frame → world frame)
-    const Mat3 R = quaternion_to_rotation(state);
+    const Mat3 R = quaternion_to_rotation(s);
     Vec3 vel_body = R.transpose() * vel;
     Vec3 drag_body = quadrotor_.compute_drag(vel_body);
     Vec3 drag_world = R * drag_body;
@@ -507,7 +525,18 @@ StateVector AerialManipulatorSystem::compute_state_derivative(
     rhs.head<3>() += drag_world;
 
     // Solve: M * q_ddot = rhs
-    Eigen::Matrix<double, DOF_TOTAL, 1> q_ddot = M.ldlt().solve(rhs);
+    // Primary: LDLT (fast, requires positive-definite M).
+    // Fallback: column-pivoting QR (robust when M is near-singular,
+    //           e.g. at kinematic singularities such as q2 near 0 or pi).
+    Eigen::Matrix<double, DOF_TOTAL, 1> q_ddot;
+    auto ldlt = M.ldlt();
+    if (ldlt.info() == Eigen::Success) {
+        q_ddot = ldlt.solve(rhs);
+    } else {
+        // M failed LDLT factorisation (non-positive-definite or numerically
+        // singular). Fall back to the more robust QR decomposition.
+        q_ddot = M.colPivHouseholderQr().solve(rhs);
+    }
 
     // 5. Write accelerations into state derivative
     // Linear acceleration (world frame)
@@ -541,10 +570,10 @@ StateVector AerialManipulatorSystem::step(
         throw std::runtime_error("No integrator set. Call set_integrator() first.");
     }
 
-    cached_input_ = input;
-
-    auto derivative_func = [this](double t_inner, const StateVector& x) -> StateVector {
-        return compute_state_derivative(x, cached_input_);
+    // Capture input by value so that concurrent calls on different instances
+    // are safe and no mutable member is needed.
+    auto derivative_func = [this, input](double t_inner, const StateVector& x) -> StateVector {
+        return compute_state_derivative(x, input);
     };
 
     StateVector new_state = integrator_->step(derivative_func, t, state, dt);

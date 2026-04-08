@@ -2,6 +2,12 @@
 
 Verifies that the system maintains stable hover with zero tracking error.
 Plots position, attitude, and control inputs.
+
+Expected Output (approximate)::
+
+    Position RMSE [m]: ~1e-24 (essentially zero -- system stays at hover)
+    Attitude error [deg]: ~0.0
+    Max motor thrust [N]: ~4.91 (= m*g/4 at hover)
 """
 
 import sys

@@ -28,7 +28,7 @@ class State:
         state.position, state.velocity, state.quaternion, etc.
     """
 
-    def __init__(self, data: np.ndarray | None = None):
+    def __init__(self, data: np.ndarray | None = None) -> None:
         if data is None:
             self._data = np.zeros(STATE_DIM)
             self._data[6] = 1.0  # identity quaternion w=1
@@ -42,57 +42,64 @@ class State:
 
     @property
     def position(self) -> np.ndarray:
+        """World-frame position [m], shape (3,)."""
         return self._data[IDX.POS]
 
     @position.setter
-    def position(self, val):
+    def position(self, val: np.ndarray) -> None:
         self._data[IDX.POS] = val
 
     @property
     def velocity(self) -> np.ndarray:
+        """World-frame linear velocity [m/s], shape (3,)."""
         return self._data[IDX.VEL]
 
     @velocity.setter
-    def velocity(self, val):
+    def velocity(self, val: np.ndarray) -> None:
         self._data[IDX.VEL] = val
 
     @property
     def quaternion(self) -> np.ndarray:
-        """[w, x, y, z] quaternion."""
+        """Attitude quaternion [w, x, y, z] (Hamilton convention), shape (4,)."""
         return self._data[IDX.QUAT]
 
     @quaternion.setter
-    def quaternion(self, val):
+    def quaternion(self, val: np.ndarray) -> None:
         self._data[IDX.QUAT] = val
 
     @property
     def angular_velocity(self) -> np.ndarray:
-        """Body-frame angular velocity [rad/s]."""
+        """Body-frame angular velocity [rad/s], shape (3,)."""
         return self._data[IDX.ANG_VEL]
 
     @angular_velocity.setter
-    def angular_velocity(self, val):
+    def angular_velocity(self, val: np.ndarray) -> None:
         self._data[IDX.ANG_VEL] = val
 
     @property
     def joint_positions(self) -> np.ndarray:
-        """[q1_azimuth, q2_elevation] in [rad]."""
+        """[q1_azimuth, q2_elevation] in [rad], shape (2,)."""
         return self._data[IDX.JOINT_POS]
 
     @joint_positions.setter
-    def joint_positions(self, val):
+    def joint_positions(self, val: np.ndarray) -> None:
         self._data[IDX.JOINT_POS] = val
 
     @property
     def joint_velocities(self) -> np.ndarray:
+        """[dq1/dt, dq2/dt] in [rad/s], shape (2,)."""
         return self._data[IDX.JOINT_VEL]
 
     @joint_velocities.setter
-    def joint_velocities(self, val):
+    def joint_velocities(self, val: np.ndarray) -> None:
         self._data[IDX.JOINT_VEL] = val
 
     def euler_angles(self) -> np.ndarray:
-        """Convert quaternion to ZYX Euler angles [roll, pitch, yaw] in [rad]."""
+        """Convert quaternion to ZYX Euler angles [roll, pitch, yaw] in [rad].
+
+        Returns:
+            np.ndarray: shape (3,) — [roll, pitch, yaw] in radians.
+        """
         w, x, y, z = self.quaternion
         roll = np.arctan2(2*(w*x + y*z), 1 - 2*(x*x + y*y))
         pitch = np.arcsin(np.clip(2*(w*y - z*x), -1, 1))
@@ -100,7 +107,11 @@ class State:
         return np.array([roll, pitch, yaw])
 
     def rotation_matrix(self) -> np.ndarray:
-        """Convert quaternion to 3x3 rotation matrix."""
+        """Convert quaternion to 3x3 rotation matrix (body-to-world).
+
+        Returns:
+            np.ndarray: shape (3, 3) rotation matrix R such that v_world = R @ v_body.
+        """
         w, x, y, z = self.quaternion
         return np.array([
             [1-2*(y*y+z*z), 2*(x*y-w*z),   2*(x*z+w*y)],
@@ -109,6 +120,7 @@ class State:
         ])
 
     def copy(self) -> "State":
+        """Return a deep copy of this state."""
         return State(self._data.copy())
 
     def __repr__(self) -> str:

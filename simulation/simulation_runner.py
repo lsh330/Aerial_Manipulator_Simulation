@@ -1,7 +1,7 @@
 """Main simulation loop orchestrating all components (Mediator pattern)."""
 
 import numpy as np
-from typing import Callable
+from typing import Callable, Optional
 from simulation.simulation_config import SimulationConfig
 from simulation.time_manager import TimeManager
 from models.state import State
@@ -13,7 +13,7 @@ from analysis.data_logger import DataLogger
 class SimulationRunner:
     """Mediator that orchestrates engine, controllers, logger, and time management."""
 
-    def __init__(self, config: SimulationConfig):
+    def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self.time_mgr = TimeManager(config.dt, config.duration, config.log_interval)
         self.logger = DataLogger()
@@ -30,20 +30,31 @@ class SimulationRunner:
         self.nmpc_ctrl = NMPCController(
             config.quadrotor, config.manipulator, config.environment)
 
-    def run(self, reference_trajectory: Callable[[float], dict],
-            progress_callback: Callable[[float], None] | None = None) -> DataLogger:
+    def run(
+        self,
+        reference_trajectory: Callable[[float], dict],
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> DataLogger:
         """Execute the full simulation.
 
         Args:
-            reference_trajectory: function t → dict with keys:
-                position, velocity, acceleration, yaw, joint_positions, joint_velocities
-            progress_callback: optional function called with progress fraction [0,1]
+            reference_trajectory: Callable ``t -> dict`` with keys:
+
+                - ``position`` (np.ndarray, shape (3,)): desired position [m]
+                - ``velocity`` (np.ndarray, shape (3,)): desired velocity [m/s]
+                - ``acceleration`` (np.ndarray, shape (3,)): desired acceleration [m/s²]
+                - ``yaw`` (float): desired yaw angle [rad]
+                - ``joint_positions`` (np.ndarray, shape (2,)): desired joint angles [rad]
+                - ``joint_velocities`` (np.ndarray, shape (2,)): desired joint rates [rad/s]
+
+            progress_callback: Optional callable invoked with progress fraction in [0, 1]
+                every 1000 integration steps.
 
         Returns:
-            DataLogger with recorded data
+            DataLogger: Logger object containing the full recorded simulation data.
         """
         state = State(self.config.initial_state_vector())
-        _nmpc_input_cache = None
+        _nmpc_input_cache: Optional[np.ndarray] = None
         _nmpc_counter = 0
 
         self.nmpc_ctrl.set_reference_trajectory(reference_trajectory)
