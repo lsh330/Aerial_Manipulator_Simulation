@@ -1,0 +1,25 @@
+# ============================================================
+# SDRE Controller Parameters
+# ============================================================
+# Inner loop: attitude(3) + joints(2) = 5-DOF subsystem
+# State: [e_att(3), e_joint(2), e_omega(3), e_joint_vel(2)] = 10
+
+sdre_inner:
+  # Q diagonal: state cost weights
+  # Higher = tighter tracking, but more aggressive torques
+  Q_attitude: [50.0, 50.0, 20.0]       # roll, pitch, yaw error penalty
+  Q_joints: [200.0, 200.0]             # joint angle error penalty (increased for better tracking)
+  Q_angular_vel: [1.0, 1.0, 0.5]       # angular velocity error penalty
+  Q_joint_vel: [4.0, 4.0]              # joint velocity error penalty
+
+  # R diagonal: input cost weights
+  # Higher = less aggressive, avoids motor saturation
+  R_body_torque: [1.0, 1.0, 1.0]       # roll, pitch, yaw torque penalty
+  R_joint_torque: [0.3, 0.3]           # joint torque penalty
+
+# Outer loop: Position PID (unchanged, handles underactuation)
+position_pid:
+  Kp: [6.0, 6.0, 8.0]
+  Kd: [4.5, 4.5, 5.6]
+  Ki: [0.1, 0.1, 0.2]
+  integrator_limit: 2.0

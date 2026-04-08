@@ -17,8 +17,14 @@ from analysis.data_logger import DataLogger
 class SimulationRunner:
     """Mediator that orchestrates engine, controllers, logger, and time management."""
 
-    def __init__(self, config: SimulationConfig):
+    def __init__(self, config: SimulationConfig, controller_mode: str = "hierarchical"):
+        """
+        Args:
+            config: SimulationConfig
+            controller_mode: "hierarchical" (PID+SO3+PD) or "sdre" (full-system SDRE)
+        """
         self.config = config
+        self.controller_mode = controller_mode
         self.time_mgr = TimeManager(config.dt, config.duration, config.log_interval)
         self.logger = DataLogger()
         self.output = OutputManager()
@@ -30,7 +36,11 @@ class SimulationRunner:
         )
 
         # Build controllers
-        self._build_controllers(config)
+        if controller_mode == "sdre":
+            from control.sdre_controller import SDREController
+            self.sdre_ctrl = SDREController(self.system)
+        else:
+            self._build_controllers(config)
 
     def _build_controllers(self, cfg: SimulationConfig):
         import yaml
@@ -90,21 +100,25 @@ class SimulationRunner:
             dt = self.time_mgr.dt
             ref = reference_trajectory(t)
 
-            # ── Hierarchical control ──
-            # 1. Position → desired thrust + attitude
-            pos_out = self.position_ctrl.update(state.data, ref, dt)
-            thrust_total = pos_out[0]
-            R_des = pos_out[1:10].reshape(3, 3)
+            # ── Control ──
+            if self.controller_mode == "sdre":
+                input_vec = self.sdre_ctrl.compute_control(state.data, ref, dt)
+            else:
+                # Hierarchical control
+                # 1. Position → desired thrust + attitude
+                pos_out = self.position_ctrl.update(state.data, ref, dt)
+                thrust_total = pos_out[0]
+                R_des = pos_out[1:10].reshape(3, 3)
 
-            # 2. Attitude → body torques
-            att_ref = {"R_des": R_des}
-            tau_body = self.attitude_ctrl.update(state.data, att_ref, dt)
+                # 2. Attitude → body torques
+                att_ref = {"R_des": R_des}
+                tau_body = self.attitude_ctrl.update(state.data, att_ref, dt)
 
-            # 3. Manipulator → joint torques
-            tau_joint = self.manip_ctrl.update(state.data, ref, dt)
+                # 3. Manipulator → joint torques
+                tau_joint = self.manip_ctrl.update(state.data, ref, dt)
 
-            # 4. Control allocation → actuator commands
-            input_vec = self.allocator.allocate(thrust_total, tau_body, tau_joint)
+                # 4. Control allocation → actuator commands
+                input_vec = self.allocator.allocate(thrust_total, tau_body, tau_joint)
 
             # ── Log data ──
             if self.time_mgr.should_log():
