@@ -1,0 +1,49 @@
+# ============================================================
+# Aerial Manipulator - Default Physical Parameters
+# ============================================================
+
+quadrotor:
+  mass: 1.5                   # [kg] quadrotor body mass
+  arm_length: 0.25            # [m] motor-to-center distance
+  inertia:                    # [kg·m²] body frame inertia tensor (diagonal)
+    Ixx: 0.0347
+    Iyy: 0.0458
+    Izz: 0.0977
+  thrust_coeff: 8.54858e-6    # [N/(rad/s)²] rotor thrust coefficient k_f
+  drag_coeff: 1.6e-2          # [N·s/m] translational drag coefficient
+  torque_coeff: 1.36e-7       # [N·m/(rad/s)²] rotor torque coefficient k_τ
+  motor_time_constant: 0.02   # [s] first-order motor dynamics τ_m
+  max_motor_speed: 1200.0     # [rad/s] motor speed saturation
+
+manipulator:
+  attachment_offset: [0.0, 0.0, -0.1]  # [m] joint1 position in body frame
+
+  link1:
+    mass: 0.3                 # [kg]
+    length: 0.3               # [m]
+    com_distance: 0.15        # [m] distance from joint to COM
+    inertia:                  # [kg·m²] link frame inertia tensor (diagonal)
+      Ixx: 0.001
+      Iyy: 0.0027
+      Izz: 0.0027
+
+  link2:
+    mass: 0.2                 # [kg]
+    length: 0.25              # [m]
+    com_distance: 0.125       # [m]
+    inertia:
+      Ixx: 0.0005
+      Iyy: 0.0012
+      Izz: 0.0012
+
+  joint_limits:               # [rad]
+    q1_min: -3.14159          # azimuth (full rotation)
+    q1_max:  3.14159
+    q2_min: -1.5708           # elevation (-90°)
+    q2_max:  2.3562           # elevation (+135°)
+
+  max_joint_torque: 5.0       # [N·m] per joint
+
+environment:
+  gravity: 9.81               # [m/s²]
+  air_density: 1.225          # [kg/m³]

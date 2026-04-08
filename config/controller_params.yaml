@@ -1,0 +1,29 @@
+# ============================================================
+# Aerial Manipulator - Controller Parameters
+# ============================================================
+
+position_controller:
+  type: "pid"
+  gains:
+    Kp: [6.0, 6.0, 8.0]      # [N/m] proportional gains (x, y, z)
+    Kd: [4.5, 4.5, 5.0]      # [N·s/m] derivative gains
+    Ki: [0.5, 0.5, 1.0]      # [N/(m·s)] integral gains
+  integrator_limit: 2.0       # [N] anti-windup saturation
+
+attitude_controller:
+  type: "geometric_so3"
+  gains:
+    Kr: [8.0, 8.0, 4.0]      # [N·m/rad] rotational proportional gains (roll, pitch, yaw)
+    Kw: [2.5, 2.5, 1.5]      # [N·m·s/rad] rotational derivative gains
+
+manipulator_controller:
+  type: "computed_torque"
+  gains:
+    Kp: [20.0, 20.0]         # [N·m/rad] joint proportional gains
+    Kd: [5.0, 5.0]           # [N·m·s/rad] joint derivative gains
+  gravity_compensation: true
+  reaction_compensation: true  # compensate reaction torques on quadrotor
+
+control_allocator:
+  type: "pseudoinverse"        # mixing matrix pseudoinverse
+  motor_saturation: true

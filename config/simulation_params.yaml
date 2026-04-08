@@ -1,0 +1,31 @@
+# ============================================================
+# Aerial Manipulator - Simulation Parameters
+# ============================================================
+
+simulation:
+  duration: 10.0              # [s] total simulation time
+  dt: 0.001                   # [s] fixed time step for integration
+  integrator: "rk4"           # "rk4" or "rkf45"
+
+  # Adaptive step (RKF45 only)
+  adaptive:
+    atol: 1.0e-8              # absolute tolerance
+    rtol: 1.0e-6              # relative tolerance
+    dt_min: 1.0e-6            # [s] minimum step size
+    dt_max: 0.01              # [s] maximum step size
+
+initial_conditions:
+  position: [0.0, 0.0, 1.0]  # [m] hover at 1m altitude
+  velocity: [0.0, 0.0, 0.0]
+  orientation: [1.0, 0.0, 0.0, 0.0]  # quaternion [w, x, y, z] (identity)
+  angular_velocity: [0.0, 0.0, 0.0]
+  joint_angles: [0.0, 0.0]           # [rad] arm down
+  joint_velocities: [0.0, 0.0]
+
+output:
+  log_interval: 10            # log every N steps
+  save_format: "hdf5"         # "hdf5" or "csv"
+  image_format: "png"
+  image_dpi: 300
+  animation_format: "gif"     # "gif" or "mp4"
+  animation_fps: 30

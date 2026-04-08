@@ -1,0 +1,53 @@
+# Build
+build/
+dist/
+*.egg-info/
+*.so
+*.pyd
+*.dll
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# C++ build artifacts
+*.o
+*.obj
+*.a
+*.lib
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Output data (keep structure, ignore contents)
+output/simulations/images/*.png
+output/simulations/animations/*.gif
+output/simulations/animations/*.mp4
+output/simulations/data/*.csv
+output/simulations/data/*.h5
+output/tests/images/*.png
+output/tests/animations/*.gif
+output/tests/reports/*.md
+output/tests/reports/*.html
+output/analysis/images/*.png
+output/analysis/animations/*.gif
+output/analysis/reports/*.md
+output/analysis/reports/*.html
+
+# Keep output directory structure
+!output/**/
+!output/**/.gitkeep

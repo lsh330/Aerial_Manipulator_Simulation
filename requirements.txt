@@ -1,0 +1,16 @@
+# Core dependencies
+numpy>=1.24
+scipy>=1.11
+matplotlib>=3.7
+pyyaml>=6.0
+pandas>=2.0
+h5py>=3.9
+
+# Build dependencies
+pybind11>=2.11
+cmake>=3.16
+
+# Dev / Test
+pytest>=7.4
+pytest-cov>=4.1
+pytest-html>=4.0
