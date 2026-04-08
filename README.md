@@ -73,9 +73,9 @@ x_{k+1} = f_{\text{RK4}}(x_k, u_k, \Delta t_{\text{mpc}}), \quad u_{\min} \leq u
 
 ### 핵심 설계 요소
 
-**CasADi 심볼릭 동역학** — C++ 엔진의 운동 방정식을 CasADi 심볼릭 변수로 정확히 재구현합니다 (`control/casadi_dynamics.py`). C++ 엔진과 동일한 $M(q)$, $C(q,\dot{q})$, $G(q)$를 심볼릭으로 구성하여, 시뮬레이션 모델과 예측 모델 사이의 plant-model mismatch가 없습니다.
+**CasADi 심볼릭 동역학 + 코드 생성** — C++ 엔진의 운동 방정식을 CasADi 심볼릭 변수로 정확히 재구현합니다 (`control/casadi_dynamics.py`). C++ 엔진과 동일한 $M(q)$, $C(q,\dot{q})$, $G(q)$를 심볼릭으로 구성하여, 시뮬레이션 모델과 예측 모델 사이의 plant-model mismatch가 없습니다. 심볼릭 RK4 step 함수와 그 1차/2차 AD 도함수를 CasADi CodeGenerator로 C 코드 생성 후 네이티브 DLL로 컴파일하여, IPOPT가 컴파일된 기계어를 직접 호출합니다 (`control/nmpc_controller.py`).
 
-**Analytic Jacobians via CasADi AD** — CasADi의 자동 미분(AD)으로 동역학의 해석적 Jacobian을 자동 생성합니다. 이를 IPOPT에 전달하여 수렴 속도와 안정성을 크게 향상시킵니다. 수치 미분(finite difference) 대비 정확도와 속도 모두 우월합니다.
+**Analytic Jacobians & Hessians via CasADi AD** — CasADi의 자동 미분(AD)으로 동역학의 해석적 Jacobian과 Hessian을 자동 생성합니다. 이를 IPOPT에 전달하여 수렴 속도와 안정성을 크게 향상시킵니다. 수치 미분(finite difference) 대비 정확도와 속도 모두 우월합니다. 2차 도함수(Hessian)를 포함하므로 IPOPT가 exact second-order 정보를 활용하여 3회 이내에 수렴합니다.
 
 **Quaternion 자세 오차 비용** — 자세 오차는 quaternion 곱으로 정의합니다:
 
@@ -472,7 +472,9 @@ Aerial Manipulator/
 │       └── test_trajectory_tracking.py
 │
 ├── scripts/
-│   └── build.sh                    # C++ 엔진 빌드 스크립트
+│   ├── build.sh                    # C++ 엔진 빌드 스크립트
+│   ├── profile_simulation.py       # 시뮬레이션 프로파일링 / 최적화 전후 비교
+│   └── generate_block_diagram.py   # 제어 구조 block diagram 생성
 │
 ├── docs/
 │   ├── images/                     # 문서용 이미지
@@ -490,6 +492,42 @@ Aerial Manipulator/
         ├── images/
         └── reports/
 ```
+
+---
+
+## Performance Optimization
+
+### NMPC 솔버 가속: CasADi CodeGenerator + DLL 컴파일
+
+NMPC 솔버는 매 제어 주기(20 ms)마다 비선형 최적화 문제(NLP)를 풀어야 합니다.
+기본 CasADi SX 인터프리터는 매 IPOPT iteration에서 심볼릭 그래프를 Python-level로 순회하여 함수/Jacobian/Hessian을 평가하므로, 이것이 시뮬레이션 시간의 99% 이상을 차지하는 병목이었습니다.
+
+**해법: Ahead-of-Time 코드 생성**
+
+1. **CasADi CodeGenerator**로 RK4 step 함수(`f_step`)와 그 1차/2차 AD 도함수를 C 코드로 생성
+2. **MinGW gcc -O2 -march=native**로 공유 라이브러리(DLL)로 컴파일
+3. **`ca.external("F", dll_path)`**로 IPOPT에 연결 → 컴파일된 기계어를 직접 호출
+4. DLL은 물리 파라미터의 SHA256 해시 기반으로 `%LOCALAPPDATA%`에 영구 캐싱 (최초 1회 컴파일 후 재사용)
+
+**추가 최적화:**
+
+- **MX 기반 NLP 구성**: 외부 함수(`ca.external`)와 호환되는 MX 변수로 NLP 재구성
+- **Trajectory shift warm-starting**: 이전 솔루션 전체를 1 step 앞으로 이동하여 초기 추정으로 사용 → IPOPT 수렴 iterations 최소화 (3 iterations)
+- **버퍼 사전 할당**: 파라미터/초기 추정 벡터의 매 호출 메모리 할당 제거
+- **Python 루프 최적화**: 메서드 로컬 바인딩, reference 함수 호출 최소화
+
+### 성능 결과
+
+| 지표 | 최적화 전 | 최적화 후 | 개선 |
+|------|-----------|-----------|------|
+| NLP 빌드 시간 | 7.1 s | 0.17 s | **42x** |
+| NMPC 솔버 1회 호출 | 415 ms | 46 ms | **9x** |
+| 2초 시뮬레이션 | 41.4 s | 4.6 s | **9x** |
+| 실시간 대비 | 0.048x | 0.44x | **9x** |
+| IPOPT iterations/call | 50 (max) | 3 | warm-start 효과 |
+
+수치적 결과는 최적화 전과 동일합니다 ($\max|\Delta u| < 10^{-13}$).
+동일한 42개 테스트가 모두 통과하며, 재현 시 bit-exact 동일 결과를 보장합니다.
 
 ---
 
