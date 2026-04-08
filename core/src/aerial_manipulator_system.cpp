@@ -489,14 +489,22 @@ StateVector AerialManipulatorSystem::compute_state_derivative(
     x_dot(idx::JOINT_POS)   = q_dot_joint(0);
     x_dot(idx::JOINT_POS+1) = q_dot_joint(1);
 
-    // 4. Solve M(q) * q_ddot = B*u - C(q,q_dot)*q_dot - G(q)
+    // 4. Solve M(q) * q_ddot = B*u - C(q,q_dot)*q_dot - G(q) + F_drag
     //    for q_ddot = [v_dot(3), omega_dot(3), q_ddot_joint(2)]
     auto M = compute_mass_matrix(state);
     auto C_qdot = compute_coriolis_vector(state);
     auto G = compute_gravity_vector(state);
     auto B = compute_input_matrix(state);
 
+    // Translational aerodynamic drag (body frame → world frame)
+    const Mat3 R = quaternion_to_rotation(state);
+    Vec3 vel_body = R.transpose() * vel;
+    Vec3 drag_body = quadrotor_.compute_drag(vel_body);
+    Vec3 drag_world = R * drag_body;
+
     Eigen::Matrix<double, DOF_TOTAL, 1> rhs = B * input - C_qdot - G;
+    // Add drag as external force on translational DOFs
+    rhs.head<3>() += drag_world;
 
     // Solve: M * q_ddot = rhs
     Eigen::Matrix<double, DOF_TOTAL, 1> q_ddot = M.ldlt().solve(rhs);

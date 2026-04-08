@@ -35,7 +35,7 @@ class SimulationRunner:
     def _build_controllers(self, cfg: SimulationConfig):
         import yaml
         from pathlib import Path
-        ctrl_path = Path("config") / "controller_params.yaml"
+        ctrl_path = Path(__file__).parent.parent / "config" / "controller_params.yaml"
         with open(ctrl_path) as f:
             cp = yaml.safe_load(f)
 
