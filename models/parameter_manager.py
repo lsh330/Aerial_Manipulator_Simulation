@@ -52,7 +52,7 @@ class ParameterManager:
         self.config_dir = Path(config_dir)
 
     def load_default_params(self) -> tuple[QuadrotorConfig, ManipulatorConfig, EnvironmentConfig]:
-        with open(self.config_dir / "default_params.yaml") as f:
+        with open(self.config_dir / "default_params.yaml", encoding="utf-8") as f:
             raw = yaml.safe_load(f)
 
         quad = self._parse_quadrotor(raw["quadrotor"])

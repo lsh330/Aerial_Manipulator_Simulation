@@ -36,7 +36,7 @@ class SimulationRunner:
         import yaml
         from pathlib import Path
         ctrl_path = Path(__file__).parent.parent / "config" / "controller_params.yaml"
-        with open(ctrl_path) as f:
+        with open(ctrl_path, encoding="utf-8") as f:
             cp = yaml.safe_load(f)
 
         pc = cp["position_controller"]

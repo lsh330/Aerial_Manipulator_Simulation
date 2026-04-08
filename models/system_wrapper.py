@@ -12,6 +12,15 @@ from models.parameter_manager import (
 
 # Try importing the compiled C++ module
 try:
+    import os, sys
+    # MinGW runtime DLLs needed on Windows
+    _mingw_bin = r"C:\msys64\mingw64\bin"
+    if os.path.isdir(_mingw_bin):
+        os.add_dll_directory(_mingw_bin)
+    # Ensure models/ is on sys.path for _core.pyd
+    _models_dir = os.path.dirname(os.path.abspath(__file__))
+    if _models_dir not in sys.path:
+        sys.path.insert(0, _models_dir)
     import _core
     HAS_CPP_ENGINE = True
 except ImportError:

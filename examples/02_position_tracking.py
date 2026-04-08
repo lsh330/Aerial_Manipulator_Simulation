@@ -16,8 +16,8 @@ from analysis.result_analyzer import ResultAnalyzer
 from models.output_manager import OutputManager
 
 
-RADIUS = 0.5       # [m] circle radius
-OMEGA = 0.5 * np.pi  # [rad/s] angular rate → period = 4s
+RADIUS = 0.3       # [m] circle radius (smaller for stability)
+OMEGA = 0.3 * np.pi  # [rad/s] angular rate → period ≈ 6.7s
 ALTITUDE = 1.0      # [m]
 
 
@@ -51,8 +51,9 @@ def circular_reference(t: float) -> dict:
 def main():
     config = SimulationConfig.from_yaml()
     config.duration = 10.0
-    # Start at beginning of circle
+    # Start at beginning of circle with matching velocity
     config.initial_position = np.array([RADIUS, 0.0, ALTITUDE])
+    config.initial_velocity = np.array([0.0, RADIUS * OMEGA, 0.0])  # tangential velocity
 
     runner = SimulationRunner(config)
     print("Running circular trajectory tracking...")

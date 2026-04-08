@@ -43,17 +43,17 @@ def arm_motion_reference(t: float) -> dict:
     q1, q2 = 0.0, 0.0
 
     if t < 3.0:
-        # Phase 1: elevation sweep 0 → 90°
-        q2 = np.radians(90.0) * smooth_step(t, 0.5, 2.5)
+        # Phase 1: elevation sweep 0 → 45°
+        q2 = np.radians(45.0) * smooth_step(t, 0.5, 2.5)
     elif t < 6.0:
-        # Phase 2: azimuth sweep 0 → 180°, elevation stays 90°
-        q2 = np.radians(90.0)
-        q1 = np.radians(180.0) * smooth_step(t, 3.0, 5.5)
+        # Phase 2: azimuth sweep 0 → 90°, elevation stays 45°
+        q2 = np.radians(45.0)
+        q1 = np.radians(90.0) * smooth_step(t, 3.0, 5.5)
     elif t < 9.0:
         # Phase 3: return both to 0
         progress = smooth_step(t, 6.0, 8.5)
-        q1 = np.radians(180.0) * (1.0 - progress)
-        q2 = np.radians(90.0) * (1.0 - progress)
+        q1 = np.radians(90.0) * (1.0 - progress)
+        q2 = np.radians(45.0) * (1.0 - progress)
     else:
         q1, q2 = 0.0, 0.0
 

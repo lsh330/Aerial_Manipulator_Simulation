@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # ── Dependencies ──
-find_package(Eigen3 3.4 REQUIRED)
+find_package(Eigen3 REQUIRED)
 find_package(pybind11 REQUIRED)
 
 # ── C++ core library ──

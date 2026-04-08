@@ -50,13 +50,60 @@ x = \begin{bmatrix} p \\ v \\ \mathbf{q} \\ \omega \\ q_j \\ \dot{q}_j \end{bmat
 
 ### 제어 구조
 
-계층적 제어 (Hierarchical Control):
+계층적 제어 시스템의 전체 블록 다이어그램:
 
-```math
-\text{Position PID} \xrightarrow{F_{\text{des}},\, R_{\text{des}}} \text{SO(3) Attitude} \xrightarrow{\tau_{\text{body}}} \text{Control Allocator} \xrightarrow{f_i} \text{Motors}
+```mermaid
+flowchart LR
+    subgraph Outer["외부 루프: Position PID"]
+        REF_POS["Reference Trajectory<br/>p_des(t), v_des(t), a_des(t)"]
+        PID["Position PID<br/>F_des = m(a_des + Kp·e_p + Kd·e_v + Ki·∫e_p)"]
+    end
+
+    subgraph Inner["내부 루프: SO(3) Attitude"]
+        R_DES["Desired Rotation<br/>R_des = f(F_des, ψ_des)"]
+        SO3["SO(3) Geometric Controller<br/>τ_body = −Kr·e_R − Kω·e_ω + ω×Jω"]
+    end
+
+    subgraph Manip["매니퓰레이터 제어"]
+        REF_JOINT["Joint Reference<br/>q_j,des(t)"]
+        MANIP_PD["PD + Gravity Comp<br/>τ_joint = Kp_j·e_q + Kd_j·e_qdot + G_j(q)"]
+    end
+
+    subgraph Alloc["제어 배분"]
+        ALLOCATOR["Control Allocator<br/>(Mixing Matrix Pseudoinverse)<br/>B† · [F_des; τ_body; τ_joint]"]
+    end
+
+    subgraph Plant["플랜트"]
+        ACTUATOR["Actuator Commands<br/>u = [f1, f2, f3, f4, τ_q1, τ_q2]"]
+        DYNAMICS["C++ Dynamics Engine<br/>M(q)·q̈ + C(q,q̇)·q̇ + G(q) = B·u<br/>RK4 / RKF45 적분"]
+    end
+
+    subgraph State["상태 피드백"]
+        STATE["State x(t+dt)<br/>[p, v, q, ω, q_j, q̇_j]"]
+    end
+
+    REF_POS -->|"e_p = p_des − p"| PID
+    PID -->|"F_des, R_des"| R_DES
+    R_DES -->|"e_R = ½(Rd'R − R'Rd)∨"| SO3
+    SO3 -->|"τ_body ∈ ℝ³"| ALLOCATOR
+    REF_JOINT -->|"e_q = q_des − q_j"| MANIP_PD
+    MANIP_PD -->|"τ_joint ∈ ℝ²"| ALLOCATOR
+    ALLOCATOR -->|"u ∈ ℝ⁶"| ACTUATOR
+    ACTUATOR --> DYNAMICS
+    DYNAMICS --> STATE
+
+    STATE -->|"p, v"| PID
+    STATE -->|"R, ω"| SO3
+    STATE -->|"q_j, q̇_j"| MANIP_PD
 ```
 
-자세 제어기는 SO(3) 기하학적 제어를 사용합니다 (Lee et al., 2010):
+**Position PID 제어기** — 위치 오차로부터 원하는 총 추력 및 자세를 계산:
+
+```math
+F_{\text{des}} = m\bigl(a_{\text{des}} + K_p\, e_p + K_d\, e_v + K_i \int e_p\, dt + g\, e_3\bigr)
+```
+
+**SO(3) 기하학적 자세 제어기** (Lee et al., 2010) — 회전 행렬 기반 특이점-free 자세 제어:
 
 ```math
 \tau = -K_R\, e_R - K_\omega\, e_\omega + \omega \times J\omega
@@ -66,6 +113,12 @@ x = \begin{bmatrix} p \\ v \\ \mathbf{q} \\ \omega \\ q_j \\ \dot{q}_j \end{bmat
 
 ```math
 e_R = \frac{1}{2}(R_d^T R - R^T R_d)^\vee
+```
+
+**매니퓰레이터 PD + 중력 보상** — 관절 공간 제어:
+
+```math
+\tau_j = K_{p,j}\,(q_{\text{des}} - q_j) + K_{d,j}\,(\dot{q}_{\text{des}} - \dot{q}_j) + G_j(q)
 ```
 
 ---
@@ -182,7 +235,7 @@ Position RMSE, 제어 입력 등의 성능 지표가 콘솔에 출력됩니다.
 
 ### Example 02: Circular Trajectory Tracking
 
-원형 궤적 추적 (반경 0.5m, 고도 1m):
+원형 궤적 추적 (반경 $R = 0.3$ m, 각속도 $\omega = 0.3\pi$ rad/s, 고도 1m):
 
 ```bash
 python examples/02_position_tracking.py
@@ -199,8 +252,8 @@ python examples/03_arm_motion.py
 ```
 
 3단계 arm sweep을 수행합니다:
-1. **Phase 1** (0-3s): elevation $q_2$: $0 \to 90\degree$ (arm이 수평으로)
-2. **Phase 2** (3-6s): azimuth $q_1$: $0 \to 180\degree$ (arm 회전)
+1. **Phase 1** (0-3s): elevation $q_2$: $0 \to 45\degree$ (arm이 비스듬히)
+2. **Phase 2** (3-6s): azimuth $q_1$: $0 \to 90\degree$ (arm 회전)
 3. **Phase 3** (6-9s): 두 관절 모두 원위치 복귀
 
 이 예제는 결합 동역학, 반력 보상, CoM 변화에 따른 위치 유지 성능을 검증합니다.
@@ -223,6 +276,93 @@ output/
     images/      ← 테스트 결과 플롯
     reports/     ← 테스트 보고서
 ```
+
+---
+
+## Simulation Results
+
+각 예제의 시뮬레이션 결과 및 성능 분석입니다.
+
+### Example 01: Hover Stabilization
+
+정지 비행 평형점에서의 안정성을 검증합니다.
+
+![Hover Position](docs/images/hover_position.png)
+
+![Hover Controls](docs/images/hover_controls.png)
+
+**성능 요약:**
+
+| 지표 | 값 |
+|------|-----|
+| Position RMSE | $\sim 10^{-16}$ m (기계 정밀도) |
+| Joint RMSE | $\sim 10^{-17}$ rad |
+
+**분석:** 호버 평형점에서 $G = Bu$ 가 정확히 성립하여 완벽한 정지 비행이 달성됩니다. 운동 방정식에서:
+
+```math
+M(q)\,\ddot{q} = B\,u - C(q, \dot{q})\,\dot{q} - G(q)
+```
+
+$\dot{q} = 0$, $B\,u = G$ 이면 $\ddot{q} = 0$ 이 되어 RMSE가 부동소수점 기계 정밀도(machine epsilon) 수준까지 내려갑니다.
+
+---
+
+### Example 02: Circular Trajectory Tracking
+
+x-y 평면에서 원형 경로를 추적하며 위치 제어기의 동적 추종 성능을 평가합니다.
+
+**파라미터:** $R = 0.3$ m, $\omega = 0.3\pi$ rad/s, altitude $= 1.0$ m
+
+![Circle Position](docs/images/circle_position.png)
+
+![Circle 3D Trajectory](docs/images/circle_trajectory_3d.png)
+
+**성능 요약:**
+
+| 지표 | x | y | z |
+|------|---|---|---|
+| Position RMSE (m) | 0.0145 | 0.0124 | 0.0008 |
+
+**분석:**
+- **x-y 평면 RMSE ~1.4 cm** — PID 제어기의 위상 지연(phase lag)에 기인합니다. 원심 가속도 $a = R\omega^2 \approx 0.44$ m/s² 를 feedforward로 보상하지만, 제어 대역폭($\sim 0.3$ Hz) 대비 궤적 주파수($\sim 0.15$ Hz)가 가까워 추종 오차가 발생합니다.
+- **z-축 RMSE < 1 mm** — 수평면 운동에 의한 부족구동(underactuation) 결합 효과가 고도 유지에 미치는 영향이 미미함을 보여줍니다.
+
+---
+
+### Example 03: Arm Motion During Hover
+
+호버링 중 매니퓰레이터를 구동하여 결합 동역학의 핵심 특성을 검증합니다.
+
+**파라미터:**
+- Phase 1: $q_2$: $0 \to 45\degree$ (elevation)
+- Phase 2: $q_1$: $0 \to 90\degree$ (azimuth)
+- Phase 3: 두 관절 원위치 복귀
+
+![Arm Motion Position](docs/images/arm_motion_position.png)
+
+![Arm Motion Attitude](docs/images/arm_motion_attitude.png)
+
+![Arm Motion Joints](docs/images/arm_motion_joints.png)
+
+![Arm Motion Controls](docs/images/arm_motion_controls.png)
+
+![Arm Motion Animation](docs/animations/arm_motion.gif)
+
+**성능 요약:**
+
+| 지표 | 값 |
+|------|-----|
+| Position RMSE (x, y, z) | [0.087, 0.087, 0.006] m |
+| Joint RMSE ($q_1$, $q_2$) | [0.024, 0.013] rad (1.4°, 0.7°) |
+| Max attitude error | 1.93° |
+| Max motor thrust | 7.69 N (hover 4.91 N 대비 57% 증가) |
+
+**분석:**
+- **위치 편차 ~8.7 cm** — 매니퓰레이터 구동 시 시스템 CoM(질량 중심)이 최대 ~4.6 cm 이동하면서 발생하는 x-y 위치 편차입니다. 위치 PID가 이를 보상하지만 과도 상태에서 오차가 남습니다.
+- **자세 오차 1.93°** — SO(3) 기하학적 제어기의 강인성으로 매니퓰레이터 반토크에도 불구하고 빠르게 수렴합니다.
+- **모터 추력 불균형** — 매니퓰레이터 구동에 의한 반토크를 보상하기 위해 차동 추력(differential thrust)이 발생하며, 최대 추력이 호버 대비 57% 증가합니다.
+- **중력 보상의 중요성** — 중력 보상이 없으면 elevation 관절에 정적 토크 $\tau_g \approx m_{\text{arm}} g\, l_{\text{com}} \sin(q_2) \approx 1.275$ N·m 이 작용하여 약 3.7° 편향이 발생합니다.
 
 ---
 

@@ -45,7 +45,7 @@ class SimulationConfig:
         pm = ParameterManager(config_dir)
         quad, manip, env = pm.load_default_params()
 
-        with open(config_dir / "simulation_params.yaml") as f:
+        with open(config_dir / "simulation_params.yaml", encoding="utf-8") as f:
             sim_raw = yaml.safe_load(f)
 
         sim = sim_raw["simulation"]
