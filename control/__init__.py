@@ -1,1 +1,1 @@
-"""Hierarchical control system: position → attitude → manipulator → allocation."""
+"""NMPC control system: CasADi symbolic dynamics + IPOPT NLP solver."""

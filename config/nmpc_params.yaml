@@ -1,0 +1,26 @@
+# ============================================================
+# NMPC Controller Parameters
+# ============================================================
+
+nmpc:
+  horizon: 20                       # prediction horizon steps (N)
+  dt_mpc: 0.02                      # MPC time step [s]
+
+  # State cost Q diagonal (17-element state)
+  Q_position: [2000, 2000, 3000]    # [x, y, z] position tracking weight
+  Q_velocity: [200, 200, 300]       # [vx, vy, vz]
+  Q_quaternion: [0, 0, 0, 0]       # not directly penalized (use quaternion error)
+  Q_angular_vel: [20, 20, 10]      # [wx, wy, wz]
+  Q_joints: [500, 500]             # [q1, q2] joint angle tracking
+  Q_joint_vel: [10, 10]            # [qd1, qd2]
+
+  # Attitude error weight (quaternion-based, separate from Q)
+  attitude_weight: 1000             # penalizes quaternion imaginary part error
+
+  # Input cost R diagonal (6-element input)
+  R_motors: [0.1, 0.1, 0.1, 0.1]  # motor thrust penalty (low = aggressive)
+  R_joints: [0.05, 0.05]           # joint torque penalty
+
+  # Actuator limits
+  motor_thrust_max: 12.3           # [N] per motor (k_f * omega_max^2)
+  joint_torque_max: 5.0            # [N·m] per joint
