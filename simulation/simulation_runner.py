@@ -59,6 +59,10 @@ class SimulationRunner:
             gravity_compensation=mc["gravity_compensation"],
             reaction_compensation=mc["reaction_compensation"],
             max_torque=cfg.manipulator.max_joint_torque,
+            link_masses=(cfg.manipulator.link1.mass, cfg.manipulator.link2.mass),
+            link_com_distances=(cfg.manipulator.link1.com_distance, cfg.manipulator.link2.com_distance),
+            link1_length=cfg.manipulator.link1.length,
+            gravity=cfg.environment.gravity,
         )
 
         self.allocator = ControlAllocator(

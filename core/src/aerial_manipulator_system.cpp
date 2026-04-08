@@ -139,79 +139,116 @@ AerialManipulatorSystem::compute_mass_matrix(const StateVector& state) const {
 }
 
 // ── Coriolis/centrifugal vector C(q,q̇)·q̇ ∈ R^8 ──
+//
+// Computed via Christoffel symbols of the first kind:
+//   [C(q,q̇)·q̇]_i = Σ_j,k c_{ijk} q̇_j q̇_k
+//   c_{ijk} = 0.5 * (dM_{ij}/dq_k + dM_{ik}/dq_j - dM_{jk}/dq_i)
+//
+// dM/dq_k is computed via central finite differences on the mass matrix.
+// This guarantees M_dot - 2C is skew-symmetric → energy conservation.
 
 Eigen::Matrix<double, DOF_TOTAL, 1>
 AerialManipulatorSystem::compute_coriolis_vector(const StateVector& state) const {
     using Vec8 = Eigen::Matrix<double, DOF_TOTAL, 1>;
+    using Mat8 = Eigen::Matrix<double, DOF_TOTAL, DOF_TOTAL>;
 
-    const Mat3 R = quaternion_to_rotation(state);
-    const Vec3 vel(state(idx::VEL), state(idx::VEL+1), state(idx::VEL+2));
-    const Vec3 omega(state(idx::ANG_VEL), state(idx::ANG_VEL+1), state(idx::ANG_VEL+2));
-    const Vec2 q_joint(state(idx::JOINT_POS), state(idx::JOINT_POS+1));
-    const Vec2 q_dot(state(idx::JOINT_VEL), state(idx::JOINT_VEL+1));
+    // Generalized velocity vector: [v(3), omega(3), q_dot_joint(2)]
+    Vec8 q_dot;
+    q_dot.head<3>() = state.segment<3>(idx::VEL);
+    q_dot.segment<3>(3) = state.segment<3>(idx::ANG_VEL);
+    q_dot.tail<2>() = state.segment<2>(idx::JOINT_VEL);
 
-    const double m1 = manipulator_.links()[0].mass();
-    const double m2 = manipulator_.links()[1].mass();
+    // Configuration-dependent coordinates: only euler angles (via quat) and joints
+    // affect M(q). Translation does not affect M → dM/d(x,y,z) = 0.
+    // Rotation affects M → we perturb euler angles via quaternion.
+    // Joints affect M → we perturb q1, q2.
+    //
+    // Indices for perturbation: [3,4,5] = euler (roll,pitch,yaw), [6,7] = joints
+    // Indices [0,1,2] = translation → dM/dq = 0, skip.
 
-    // Link COM positions and velocities in body frame
-    Vec3 r_c1 = manipulator_.link1_com_position(q_joint);
-    Vec3 r_c2 = manipulator_.link2_com_position(q_joint);
-    auto Jv1 = manipulator_.link1_com_jacobian(q_joint);
-    auto Jv2 = manipulator_.link2_com_jacobian(q_joint);
-    Vec3 v_c1_rel = Jv1 * q_dot;
-    Vec3 v_c2_rel = Jv2 * q_dot;
+    const Mat8 M0 = compute_mass_matrix(state);
 
-    auto skew = [](const Vec3& v) -> Mat3 {
-        Mat3 S;
-        S <<     0, -v(2),  v(1),
-              v(2),     0, -v(0),
-             -v(1),  v(0),     0;
-        return S;
-    };
+    constexpr double eps = 1e-7;
+    constexpr int NUM_CONFIG_DEPS = 5;  // 3 euler + 2 joints
+    // Map: config_dep index → which state element to perturb
+    // We perturb quaternion components to approximate euler angle perturbation,
+    // and joint angles directly.
 
+    // Store dM/dq_k for each configuration-dependent coordinate
+    Mat8 dM[DOF_TOTAL];
+    for (int i = 0; i < DOF_TOTAL; ++i) {
+        dM[i] = Mat8::Zero();
+    }
+
+    // dM/d(translation) = 0 → skip indices 0,1,2
+
+    // dM/d(euler_angles) via quaternion perturbation
+    // Perturb angular orientation by small rotation about each body axis
+    for (int ax = 0; ax < 3; ++ax) {
+        // Small rotation quaternion: q_pert = [cos(eps/2), sin(eps/2)*e_ax]
+        Vec3 axis = Vec3::Zero();
+        axis(ax) = 1.0;
+
+        for (int sign = 0; sign < 2; ++sign) {
+            double angle = (sign == 0) ? eps : -eps;
+            double half = angle * 0.5;
+
+            // Perturbed quaternion = original ⊗ delta
+            Quat q_orig(state(idx::QUAT), state(idx::QUAT+1),
+                        state(idx::QUAT+2), state(idx::QUAT+3));
+            q_orig.normalize();
+            Quat dq(Eigen::AngleAxisd(angle, axis));
+            Quat q_pert = q_orig * dq;
+            q_pert.normalize();
+
+            StateVector s_pert = state;
+            s_pert(idx::QUAT)   = q_pert.w();
+            s_pert(idx::QUAT+1) = q_pert.x();
+            s_pert(idx::QUAT+2) = q_pert.y();
+            s_pert(idx::QUAT+3) = q_pert.z();
+
+            Mat8 M_pert = compute_mass_matrix(s_pert);
+
+            if (sign == 0) {
+                dM[3 + ax] += M_pert;
+            } else {
+                dM[3 + ax] -= M_pert;
+            }
+        }
+        dM[3 + ax] /= (2.0 * eps);
+    }
+
+    // dM/d(joint_angles)
+    for (int j = 0; j < 2; ++j) {
+        for (int sign = 0; sign < 2; ++sign) {
+            double delta = (sign == 0) ? eps : -eps;
+            StateVector s_pert = state;
+            s_pert(idx::JOINT_POS + j) += delta;
+
+            Mat8 M_pert = compute_mass_matrix(s_pert);
+
+            if (sign == 0) {
+                dM[6 + j] += M_pert;
+            } else {
+                dM[6 + j] -= M_pert;
+            }
+        }
+        dM[6 + j] /= (2.0 * eps);
+    }
+
+    // Compute C(q,q̇)·q̇ via Christoffel symbols
     Vec8 coriolis = Vec8::Zero();
-
-    // Translation Coriolis: Σ m_i * (ω × (ω × R*r_ci) + 2ω × R*v_ci_rel)
-    // In world frame, for translational DOF
-    Vec3 c_trans = Vec3::Zero();
-    for (int i = 0; i < 2; ++i) {
-        Vec3 r_ci = (i == 0) ? r_c1 : r_c2;
-        Vec3 v_ci = (i == 0) ? v_c1_rel : v_c2_rel;
-        double mi = (i == 0) ? m1 : m2;
-
-        Vec3 r_world = R * r_ci;
-        Vec3 v_world = R * v_ci;
-        // Note: ω here is in body frame; transform contributions to world frame
-        Vec3 omega_world = R * omega;
-        c_trans += mi * (omega_world.cross(omega_world.cross(r_world))
-                       + 2.0 * omega_world.cross(v_world));
+    for (int i = 0; i < DOF_TOTAL; ++i) {
+        double sum = 0.0;
+        for (int j = 0; j < DOF_TOTAL; ++j) {
+            for (int k = 0; k < DOF_TOTAL; ++k) {
+                // c_{ijk} = 0.5 * (dM_{ij}/dq_k + dM_{ik}/dq_j - dM_{jk}/dq_i)
+                double christoffel = 0.5 * (dM[k](i,j) + dM[j](i,k) - dM[i](j,k));
+                sum += christoffel * q_dot(j) * q_dot(k);
+            }
+        }
+        coriolis(i) = sum;
     }
-    coriolis.head<3>() = c_trans;
-
-    // Rotation Coriolis: ω × (J_eff * ω) + contributions from arm
-    Mat3 J0 = quadrotor_.params().inertia;
-    Mat3 R_link = manipulator_.link1_orientation(q_joint);
-    Mat3 I1_body = R_link * manipulator_.links()[0].inertia() * R_link.transpose();
-    Mat3 I2_body = R_link * manipulator_.links()[1].inertia() * R_link.transpose();
-
-    Mat3 J_eff = J0
-        + m1 * (skew(r_c1).transpose() * skew(r_c1)) + I1_body
-        + m2 * (skew(r_c2).transpose() * skew(r_c2)) + I2_body;
-
-    Vec3 c_rot = omega.cross(J_eff * omega);
-
-    // Add Coriolis from moving links
-    for (int i = 0; i < 2; ++i) {
-        Vec3 r_ci = (i == 0) ? r_c1 : r_c2;
-        Vec3 v_ci = (i == 0) ? v_c1_rel : v_c2_rel;
-        double mi = (i == 0) ? m1 : m2;
-        c_rot += mi * skew(r_ci) * (2.0 * omega.cross(v_ci));
-    }
-    coriolis.segment<3>(3) = c_rot;
-
-    // Manipulator Coriolis: C_mm(q, q_dot) * q_dot
-    Mat2 C_mm = manipulator_.coriolis_matrix(q_joint, q_dot);
-    coriolis.tail<2>() = C_mm * q_dot;
 
     return coriolis;
 }
@@ -228,8 +265,9 @@ AerialManipulatorSystem::compute_gravity_vector(const StateVector& state) const 
 
     Vec8 G = Vec8::Zero();
 
-    // Translational gravity: -m_total * g * e3 (world frame)
-    G(2) = -total_mass() * g;
+    // Lagrangian form: G = dV/dq, V = m*g*z → G_z = +m*g
+    // EOM: M*q_ddot = B*u - C*q_dot - G
+    G(2) = total_mass() * g;
 
     // Rotational gravity: Σ m_i * [r_ci]× * R^T * g_world
     // (torque due to gravity acting on off-center masses)
