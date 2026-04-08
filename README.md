@@ -50,52 +50,14 @@ x = \begin{bmatrix} p \\ v \\ \mathbf{q} \\ \omega \\ q_j \\ \dot{q}_j \end{bmat
 
 ### 제어 구조
 
-계층적 제어 시스템의 전체 블록 다이어그램:
+계층적 제어 시스템의 전체 블록 다이어그램 — 합산점(⊕), 오차 신호, 피드백 루프가 포함된 제어공학 표준 표현:
 
-```mermaid
-flowchart LR
-    subgraph Outer["외부 루프: Position PID"]
-        REF_POS["Reference Trajectory<br/>p_des(t), v_des(t), a_des(t)"]
-        PID["Position PID<br/>F_des = m(a_des + Kp·e_p + Kd·e_v + Ki·∫e_p)"]
-    end
+![Control Block Diagram](docs/images/control_block_diagram.png)
 
-    subgraph Inner["내부 루프: SO(3) Attitude"]
-        R_DES["Desired Rotation<br/>R_des = f(F_des, ψ_des)"]
-        SO3["SO(3) Geometric Controller<br/>τ_body = −Kr·e_R − Kω·e_ω + ω×Jω"]
-    end
-
-    subgraph Manip["매니퓰레이터 제어"]
-        REF_JOINT["Joint Reference<br/>q_j,des(t)"]
-        MANIP_PD["PD + Gravity Comp<br/>τ_joint = Kp_j·e_q + Kd_j·e_qdot + G_j(q)"]
-    end
-
-    subgraph Alloc["제어 배분"]
-        ALLOCATOR["Control Allocator<br/>(Mixing Matrix Pseudoinverse)<br/>B† · [F_des; τ_body; τ_joint]"]
-    end
-
-    subgraph Plant["플랜트"]
-        ACTUATOR["Actuator Commands<br/>u = [f1, f2, f3, f4, τ_q1, τ_q2]"]
-        DYNAMICS["C++ Dynamics Engine<br/>M(q)·q̈ + C(q,q̇)·q̇ + G(q) = B·u<br/>RK4 / RKF45 적분"]
-    end
-
-    subgraph State["상태 피드백"]
-        STATE["State x(t+dt)<br/>[p, v, q, ω, q_j, q̇_j]"]
-    end
-
-    REF_POS -->|"e_p = p_des − p"| PID
-    PID -->|"F_des, R_des"| R_DES
-    R_DES -->|"e_R = ½(Rd'R − R'Rd)∨"| SO3
-    SO3 -->|"τ_body ∈ ℝ³"| ALLOCATOR
-    REF_JOINT -->|"e_q = q_des − q_j"| MANIP_PD
-    MANIP_PD -->|"τ_joint ∈ ℝ²"| ALLOCATOR
-    ALLOCATOR -->|"u ∈ ℝ⁶"| ACTUATOR
-    ACTUATOR --> DYNAMICS
-    DYNAMICS --> STATE
-
-    STATE -->|"p, v"| PID
-    STATE -->|"R, ω"| SO3
-    STATE -->|"q_j, q̇_j"| MANIP_PD
-```
+3개의 제어 루프가 **계층적 시간분리(time-scale separation)** 원칙에 따라 구성됩니다:
+- **외부 루프** (Position PID, ~2 rad/s): 위치 오차 → 원하는 추력 및 자세
+- **내부 루프** (SO(3) Attitude, ~10 rad/s): 자세 오차 → 본체 토크
+- **관절 루프** (PD + Gravity Comp, ~12 rad/s): 관절 오차 → 관절 토크
 
 **Position PID 제어기** — 위치 오차로부터 원하는 총 추력 및 자세를 계산:
 
@@ -120,6 +82,32 @@ e_R = \frac{1}{2}(R_d^T R - R^T R_d)^\vee
 ```math
 \tau_j = K_{p,j}\,(q_{\text{des}} - q_j) + K_{d,j}\,(\dot{q}_{\text{des}} - \dot{q}_j) + G_j(q)
 ```
+
+### 자동 게인 최적화 (Gain Optimizer)
+
+수동 튜닝 없이 **수학적으로 최적의 PID 게인**을 자동 산출하는 두 가지 방법을 제공합니다:
+
+**1. LQR 기반 (해석적)** — 각 서브시스템을 선형화하고 Riccati 방정식(CARE)을 풀어 최적 게인을 계산:
+
+```python
+from control.gain_optimizer import GainOptimizer
+
+optimizer = GainOptimizer(total_mass=2.0, inertia=J, joint_inertia=J_joint,
+                          effective_rot_inertia=M_rr_diag)  # from C++ M(q)
+gains = optimizer.optimize(pos_bandwidth=2.0, att_bandwidth=10.0)
+```
+
+```math
+\text{CARE}: \quad A^T P + P A - P B R^{-1} B^T P + Q = 0, \quad K = R^{-1} B^T P
+```
+
+**2. 시뮬레이션 기반 (Nelder-Mead)** — 실제 비선형 C++ 엔진으로 시뮬레이션하며 RMSE를 최소화:
+
+```python
+gains = optimizer.optimize_for_trajectory(config, reference_func, duration=2.0)
+```
+
+핵심 원리: 위치 서브시스템을 **적분 상태 포함 augmented double integrator**로 모델링하면, LQR의 최적 피드백 $K = [K_i, K_p, K_d]$가 PID 게인에 직접 대응합니다. 자세 루프에서는 C++ 엔진의 **결합 질량 행렬 $M_{rr}$**에서 추출한 실효 관성을 사용하여, 매니퓰레이터 결합 효과를 반영합니다.
 
 ---
 
