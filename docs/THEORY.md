@@ -412,7 +412,7 @@ $\delta q$가 임의이므로 피적분함수가 0:
 T = \frac{1}{2}\dot{q}^T M(q) \dot{q}
 ```
 
-**$\dfrac{d}{dt}\dfrac{\partial T}{\partial \dot{q}}$ 계산**:
+**(d/dt)(dT/dq-dot) 계산**:
 
 ```math
 \frac{\partial T}{\partial \dot{q}_i} = \sum_j M_{ij}(q)\,\dot{q}_j = [M(q)\dot{q}]_i
@@ -431,7 +431,7 @@ T = \frac{1}{2}\dot{q}^T M(q) \dot{q}
 \dot{M}_{ij} = \sum_k \frac{\partial M_{ij}}{\partial q_k}\dot{q}_k
 ```
 
-**$\dfrac{\partial T}{\partial q_i}$ 계산**:
+**dT/dq 계산**:
 
 ```math
 \frac{\partial T}{\partial q_i} = \frac{1}{2}\sum_{j,k} \frac{\partial M_{jk}}{\partial q_i}\dot{q}_j\dot{q}_k
@@ -719,15 +719,17 @@ J_omega.col(1) = axis2;
 
 **$J_\omega$의 $q_1$ 편미분**:
 
-$\mathbf{a}_1$은 $q_1$에 무관 → $\partial \mathbf{a}_1/\partial q_1 = 0$.
+축 1은 상수이므로 편미분이 0이고, 축 2의 편미분은:
 
-$\mathbf{a}_2 = [-s_1, c_1, 0]^T$이므로: $\partial \mathbf{a}_2/\partial q_1 = [-c_1, -s_1, 0]^T$.
+```math
+\frac{\partial \mathbf{a}_1}{\partial q_1} = 0, \quad \frac{\partial \mathbf{a}_2}{\partial q_1} = [-c_1,\, -s_1,\, 0]^T
+```
 
 ```math
 \frac{\partial J_\omega}{\partial q_1} = \begin{bmatrix}0 & -c_1\\ 0 & -s_1\\ 0 & 0\end{bmatrix}
 ```
 
-**$J_\omega$의 $q_2$ 편미분**: $\mathbf{a}_2$가 $q_2$에 무관 → $\partial J_\omega/\partial q_2 = 0$.
+축 2는 $q_2$ 에 무관하므로 $q_2$ 편미분은 영행렬입니다.
 
 ---
 
@@ -1060,7 +1062,7 @@ CasADi에서는 `jtimes`(forward-mode AD)로 효율적으로 계산합니다:
 M_dot_flat = ca.jtimes(M_flat, q_config, config_dot)  # directional derivative
 ```
 
-### 5.3 $\partial T/\partial q$ 계산: 쿼터니언 체인 규칙
+### 5.3 dT/dq 계산: 쿼터니언 체인 규칙
 
 운동 에너지에서:
 
@@ -1068,9 +1070,7 @@ M_dot_flat = ca.jtimes(M_flat, q_config, config_dot)  # directional derivative
 T = \tfrac{1}{2}\dot{\mathbf{q}}_{\mathrm{gen}}^T M \dot{\mathbf{q}}_{\mathrm{gen}}, \quad \dot{\mathbf{q}}_{\mathrm{gen}} = [\mathbf{v},\, \boldsymbol{\omega},\, \dot{\mathbf{q}}_j]^T
 ```
 
-$\partial T/\partial p = 0$ ($M$이 $p$에 무관)
-
-$\partial T/\partial q_{euler}$: Euler angle이 명시적으로 없으므로, quaternion chain rule:
+위치에 대한 미분은 0입니다 ( $M$ 이 $p$ 에 무관). 오일러 각에 대한 미분은 quaternion chain rule을 사용합니다:
 
 ```math
 \frac{\partial T}{\partial q_{euler,k}} = \frac{\partial T}{\partial \mathbf{q}_{quat}} \cdot Q(\mathbf{q})[:,k]
@@ -1092,15 +1092,15 @@ dT_dq = ca.vertcat(dT_dpos, dT_d_euler, dT_dq_j)  # 8×1
 
 ### 5.4 C++ 구현: Christoffel 삼중 루프
 
-`aerial_manipulator_system.cpp`에서는 $\partial M / \partial q_k$를 직접 계산하여 Christoffel 공식을 적용합니다:
+`aerial_manipulator_system.cpp`에서는 질량 행렬의 편미분을 직접 계산하여 Christoffel 공식을 적용합니다:
 
-- $\partial M / \partial p = 0$ (인덱스 0,1,2 — 생략)
-- $\partial M / \partial q_{euler,k}$ ($k=3,4,5$): 수치 중심차분 (6번의 $M$ 평가)
-- $\partial M / \partial q_1$, $\partial M / \partial q_2$: 해석적 편미분
+- 인덱스 0,1,2 (위치): 편미분 = 0 (생략)
+- 인덱스 3,4,5 (오일러 각): 수치 중심차분 (6번의 $M$ 평가)
+- 인덱스 6,7 (관절 각): 해석적 편미분
 
-해석적 편미분의 완전한 표현 ($j_{idx} \in \{0,1\}$):
+해석적 편미분의 완전한 표현:
 
-**(b) $\partial M_{rr}/\partial q_j$:**
+**(b) 회전-회전 블록의 관절 편미분:**
 
 ```math
 \frac{\partial M_{rr}}{\partial q_j} = \sum_i m_i\left(\frac{\partial[\mathbf{r}_{ci}]_\times^T}{\partial q_j}[\mathbf{r}_{ci}]_\times + [\mathbf{r}_{ci}]_\times^T\frac{\partial[\mathbf{r}_{ci}]_\times}{\partial q_j}\right) + \frac{\partial I_i^{body}}{\partial q_j}
@@ -1112,7 +1112,7 @@ $[\mathbf{r}]_\times$의 편미분:
 \frac{\partial[\mathbf{r}]_\times}{\partial q_j} = \left[\frac{\partial\mathbf{r}}{\partial q_j}\right]_\times = [J_{vi}[:,j-1]]_\times
 ```
 
-**(c)** $\partial M_{mm}/\partial q_1 = 0$, 그리고:
+**(c)** 관절-관절 블록: $q_1$ 편미분은 0이고, $q_2$ 편미분은:
 
 ```math
 \frac{\partial M_{mm}[0,0]}{\partial q_2} = (m_1 l_{c1}^2 + m_2 D^2)\sin(2q_2)
@@ -1153,7 +1153,7 @@ V = \sum_i m_i\,g\,z_i = m_0\,g\,z + m_1\,g\,z_{c1}^{world} + m_2\,g\,z_{c2}^{wo
 
 여기서 $z_{ci}^{world} = [R\,\mathbf{r}_{ci} + \mathbf{p}]_z$ (world frame의 $z$ 성분).
 
-$G(q)$는 퍼텐셜 에너지의 편미분이고 ($G = \partial V / \partial q$), 운동 방정식에서는 $M\ddot{q} + C\dot{q} + G = Bu$이므로:
+중력 벡터는 퍼텐셜 에너지의 일반화 좌표 편미분입니다. 운동 방정식에서는 $M\ddot{q} + C\dot{q} + G = Bu$ 이므로:
 
 **참고**: 코드에서 Lagrangian 부호 규약을 따릅니다:
 
@@ -1167,7 +1167,11 @@ G = +\frac{\partial V}{\partial q}
 
 **$G_z$ (병진 $z$ 방향, 인덱스 2)**:
 
-$\partial V/\partial z = (m_0 + m_1 + m_2)g = m_{total}g$
+병진 $z$ 방향의 편미분:
+
+```math
+\frac{\partial V}{\partial z} = (m_0 + m_1 + m_2)g = m_{\mathrm{total}}g
+```
 
 ```math
 G_2 = m_{total}\,g
@@ -1194,19 +1198,17 @@ G.segment<3>(3) = g_torque;
 
 **$G_{j1}$ (관절 1 gravity, 인덱스 6)**:
 
-$\partial V/\partial q_1$을 계산합니다.
-
-$V_{joint} = -m_1 g\,[\mathbf{r}_{c1}]_z - m_2 g\,[\mathbf{r}_{c2}]_z$를 $q_1$로 미분하면...
-
-더 직접적으로: $V = -\mathbf{g}_{body}^T (m_1 \mathbf{r}_{c1} + m_2 \mathbf{r}_{c2})$ (body frame)
+퍼텐셜 에너지를 $q_1$ 으로 미분합니다. Body frame 표현을 사용하면:
 
 ```math
 G_{j1} = \frac{\partial V}{\partial q_1} = -\mathbf{g}_{body}^T (m_1 J_{v1}[:,0] + m_2 J_{v2}[:,0])
 ```
 
-$= -\mathbf{g}_{body}^T \cdot (m_1 l_{c1} + m_2 D) \cdot [-s_1 s_2, c_1 s_2, 0]^T$
+전개하면:
 
-$= -(m_1 l_{c1} + m_2 D)\,s_2\,(-g_{b,x}\,s_1 + g_{b,y}\,c_1)$
+```math
+= -(m_1 l_{c1} + m_2 D)\,s_2\,(-g_{b,x}\,s_1 + g_{b,y}\,c_1)
+```
 
 ```math
 \boxed{G_{j1} = -(m_1 l_{c1} + m_2 D)\,s_2\,(-g_{b,x}\,s_1 + g_{b,y}\,c_1)}
@@ -1214,9 +1216,11 @@ $= -(m_1 l_{c1} + m_2 D)\,s_2\,(-g_{b,x}\,s_1 + g_{b,y}\,c_1)$
 
 **$G_{j2}$ (관절 2 gravity, 인덱스 7)**:
 
-$\partial V/\partial q_2 = -\mathbf{g}_{body}^T (m_1 J_{v1}[:,1] + m_2 J_{v2}[:,1])$
+마찬가지로 $q_2$ 편미분을 전개하면:
 
-$= -(m_1 l_{c1} + m_2 D)(g_{b,x}\,c_1\,c_2 + g_{b,y}\,s_1\,c_2 + g_{b,z}\,s_2)$
+```math
+\frac{\partial V}{\partial q_2} = -(m_1 l_{c1} + m_2 D)(g_{b,x}\,c_1\,c_2 + g_{b,y}\,s_1\,c_2 + g_{b,z}\,s_2)
+```
 
 ```math
 \boxed{G_{j2} = -(m_1 l_{c1} + m_2 D)(g_{b,x}c_1 c_2 + g_{b,y}s_1 c_2 + g_{b,z}s_2)}
@@ -1328,7 +1332,7 @@ $k_2$를 $x$ 주변에서 Taylor 전개합니다:
 k_2 = f + \frac{h}{2}f_x f + \frac{h^2}{4}\left(f_{xx}[f,f] + f_x f_x f\right) + O(h^3)
 ```
 
-(여기서 $f_x = \partial f/\partial x$, $[f,f]$는 directional Hessian 항)
+(여기서 $f_x$ 는 $f$ 의 Jacobian, $[f,f]$ 는 directional Hessian 항)
 
 유사하게 $k_3, k_4$를 전개하여 $\tfrac{1}{6}(k_1 + 2k_2 + 2k_3 + k_4)$를 구성하면:
 
@@ -1490,7 +1494,7 @@ g
 \end{bmatrix}
 ```
 
-여기서 $H = \nabla^2 \mathcal{L}$ (Hessian), $A = \partial g/\partial z$ (Jacobian).
+여기서 $H$ 는 라그랑지안의 Hessian, $A$ 는 제약의 Jacobian입니다.
 
 ### 9.4 CasADi 자동 미분
 
