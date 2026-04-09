@@ -115,11 +115,15 @@ class SystemWrapper:
             dt: Integration time step [s].
 
         Returns:
-            State: Next system state after integration.
+            State: Next system state after integration (reuses input State object).
         """
         if self._use_cpp:
             new_data = self._system.step(t, state.data, input_vec, dt)
-            return State(new_data)
+            # In-place update: avoid State() constructor overhead (np.array copy
+            # + assert check) on every step.  The C++ engine returns a new numpy
+            # array, so we copy its contents directly into the existing buffer.
+            state._data[:] = new_data
+            return state
         else:
             return self._python_step(t, state, input_vec, dt)
 

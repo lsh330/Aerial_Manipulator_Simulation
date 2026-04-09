@@ -93,6 +93,10 @@ class SimulationRunner:
         _ref_cache: Optional[dict] = None
         _ref_cache_t: float = -1.0
         _quat_des = np.array([1.0, 0.0, 0.0, 0.0])  # desired quaternion
+        # Pre-allocated buffers for inner PD loop (avoid per-step allocation)
+        _q_err = np.zeros(4)
+        _tau_wrench = np.zeros(4)
+        _input_buf = np.zeros(6)
 
         while not self.time_mgr.is_finished():
             t = self.time_mgr.t
@@ -111,30 +115,26 @@ class SimulationRunner:
                     _quat_des = x1[6:10]
                     _quat_des /= np.linalg.norm(_quat_des)
 
-            # ── Inner PD correction at 1kHz ──
-            quat = state.data[6:10]
-            omega = state.data[10:13]
-            # Quaternion error: q_err = q_des^* ⊗ q
-            qw, qx, qy, qz = _quat_des
-            pw, px, py, pz = quat
-            q_err = np.array([
-                qw*pw + qx*px + qy*py + qz*pz,    # w
-                qw*px - qx*pw - qy*pz + qz*py,     # x
-                qw*py + qx*pz - qy*pw - qz*px,     # y
-                qw*pz - qx*py + qy*px - qz*pw,     # z
-            ])
-            # Sign correction for shortest-path rotation
-            if q_err[0] < 0:
-                q_err = -q_err
-            # PD torque correction (body frame)
-            tau_corr = Kp_att * q_err[1:4] + Kd_att * (-omega)
-            # Map correction to motor thrusts: Δf = A_inv @ [0, τ_r, τ_p, τ_y]
-            delta_f = A_inv @ np.array([0.0, tau_corr[0], tau_corr[1], tau_corr[2]])
-            # Apply correction
-            input_vec = _nmpc_input_cache.copy()
-            input_vec[:4] += delta_f
-            input_vec[:4] = np.clip(input_vec[:4], 0.0, 12.3)
-            input_vec[4:] = np.clip(input_vec[4:], -5.0, 5.0)
+            # ── Inner PD correction at 1kHz (pre-allocated buffers) ──
+            sd = state.data
+            qw, qx, qy, qz = _quat_des[0], _quat_des[1], _quat_des[2], _quat_des[3]
+            pw, px, py, pz = sd[6], sd[7], sd[8], sd[9]
+            _q_err[0] = qw*pw + qx*px + qy*py + qz*pz
+            _q_err[1] = qw*px - qx*pw - qy*pz + qz*py
+            _q_err[2] = qw*py + qx*pz - qy*pw - qz*px
+            _q_err[3] = qw*pz - qx*py + qy*px - qz*pw
+            if _q_err[0] < 0:
+                _q_err *= -1
+            # PD torque → motor thrust correction (in-place)
+            _tau_wrench[0] = 0.0
+            _tau_wrench[1] = Kp_att[0] * _q_err[1] - Kd_att[0] * sd[10]
+            _tau_wrench[2] = Kp_att[1] * _q_err[2] - Kd_att[1] * sd[11]
+            _tau_wrench[3] = Kp_att[2] * _q_err[3] - Kd_att[2] * sd[12]
+            _input_buf[:] = _nmpc_input_cache
+            _input_buf[:4] += A_inv @ _tau_wrench
+            np.clip(_input_buf[:4], 0.0, 12.3, out=_input_buf[:4])
+            np.clip(_input_buf[4:], -5.0, 5.0, out=_input_buf[4:])
+            input_vec = _input_buf
             _nmpc_counter += 1
 
             # ── Log data (reuse NMPC ref when on same timestep) ──

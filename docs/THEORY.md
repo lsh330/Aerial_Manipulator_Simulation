@@ -108,25 +108,25 @@ ij = k,\quad ji = -k,\quad jk = i,\quad kj = -i,\quad ki = j,\quad ik = -j
 실수부(scalar) 수집:
 
 ```math
-w\text{-component} = p_w q_w - p_x q_x - p_y q_y - p_z q_z
+w\mathrm{-component} = p_w q_w - p_x q_x - p_y q_y - p_z q_z
 ```
 
 $i$-부 수집 ($i$를 포함하는 항):
 
 ```math
-x\text{-component} = p_w q_x + p_x q_w + p_y q_z - p_z q_y
+x\mathrm{-component} = p_w q_x + p_x q_w + p_y q_z - p_z q_y
 ```
 
 $j$-부 수집:
 
 ```math
-y\text{-component} = p_w q_y - p_x q_z + p_y q_w + p_z q_x
+y\mathrm{-component} = p_w q_y - p_x q_z + p_y q_w + p_z q_x
 ```
 
 $k$-부 수집:
 
 ```math
-z\text{-component} = p_w q_z + p_x q_y - p_y q_x + p_z q_w
+z\mathrm{-component} = p_w q_z + p_x q_y - p_y q_x + p_z q_w
 ```
 
 따라서 완전한 Hamilton 곱:
@@ -178,7 +178,7 @@ p_z & -p_y &  p_x &  p_w
 \mathbf{q}^{-1} = \frac{\mathbf{q}^*}{\|\mathbf{q}\|^2}
 ```
 
-증명: $\mathbf{q} \otimes \mathbf{q}^{-1} = \mathbf{q} \otimes \frac{\mathbf{q}^*}{\|\mathbf{q}\|^2} = \frac{\mathbf{q} \otimes \mathbf{q}^*}{\|\mathbf{q}\|^2} = \frac{\|\mathbf{q}\|^2}{\|\mathbf{q}\|^2} = 1 = \mathbf{q}_{\text{identity}}$
+증명: $\mathbf{q} \otimes \mathbf{q}^{-1} = \mathbf{q} \otimes \frac{\mathbf{q}^*}{\|\mathbf{q}\|^2} = \frac{\mathbf{q} \otimes \mathbf{q}^*}{\|\mathbf{q}\|^2} = \frac{\|\mathbf{q}\|^2}{\|\mathbf{q}\|^2} = 1 = \mathbf{q}_{\mathrm{id}}$
 
 **단위 쿼터니언 ($\|\mathbf{q}\| = 1$)**의 경우:
 
@@ -793,7 +793,7 @@ M.block<3,3>(3,3) = J0
 
 **참고**: $[\mathbf{r}]_\times^T [\mathbf{r}]_\times = \|\mathbf{r}\|^2 I - \mathbf{r}\mathbf{r}^T$ (Steiner 항, 회전 관성에 대한 평행 축 기여).
 
-### 4.4 블록 (c): $M_{mm}$ (Manipulator-Manipulator, 2×2) — $q_2$ 의존성
+### 4.4 블록 (c): $M_{mm}$ (Manipulator-Manipulator, $2 \times 2$) — $q_2$ 의존성
 
 $\dot{\mathbf{q}}_j$에 대한 운동에너지 기여:
 
@@ -864,7 +864,7 @@ $\mathbf{v}^T(\boldsymbol{\omega} \times R\mathbf{r}_{ci}) = \mathbf{v}^T ([\bol
 따라서:
 
 ```math
-T_{tr} = \frac{1}{2}\mathbf{v}^T \left(-\sum_i m_i [R\mathbf{r}_{ci}]_\times\right) \boldsymbol{\omega} + \text{h.c.}
+T_{tr} = \frac{1}{2}\mathbf{v}^T \left(-\sum_i m_i [R\mathbf{r}_{ci}]_\times\right) \boldsymbol{\omega} + \mathrm{h.c.}
 ```
 
 $[R\mathbf{r}]_\times = R[\mathbf{r}]_\times R^T$ 관계를 이용하면 ($R\mathbf{r} = $ world frame 벡터):
@@ -1350,7 +1350,7 @@ x_0 = x(t)
 입력 제약:
 
 ```math
-0 \leq f_i \leq 12.3 \text{ N}, \quad i = 1,2,3,4
+0 \leq f_i \leq 12.3\;\mathrm{N}, \quad i = 1,2,3,4
 ```
 
 ```math
@@ -1391,7 +1391,7 @@ KKT (Karush-Kuhn-Tucker) 1차 최적성 조건:
 ```
 
 ```math
-g(\mathbf{z}) = 0 \quad (\text{equality constraints})
+g(\mathbf{z}) = 0 \quad (\mathrm{equality\ constraints})
 ```
 
 IPOPT는 Interior Point Method로 이를 풀며, Newton step:
@@ -1526,7 +1526,7 @@ J_{v1} \big|_{q_2=0} = \begin{bmatrix} 0 & l_{c1} \\ 0 & 0 \\ 0 & 0 \end{bmatrix
 
 **코드의 강건성 처리**:
 - `aerial_manipulator_system.cpp`: LDLT 실패 시 column-pivoting QR로 대체
-- 운용 범위에서 $|q_2| > 5°$ 유지 권장
+- 운용 범위에서 $|q_2| > 5^{\circ}$ 유지 권장
 
 ---
 
