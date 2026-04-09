@@ -18,6 +18,7 @@ import numpy as np
 from simulation.simulation_config import SimulationConfig
 from simulation.simulation_runner import SimulationRunner
 from visualization.plot_manager import PlotManager
+from visualization.animator import Animator
 from analysis.result_analyzer import ResultAnalyzer
 from models.output_manager import OutputManager
 
@@ -61,22 +62,24 @@ def main():
     config.initial_position = np.array([RADIUS, 0.0, ALTITUDE])
     config.initial_velocity = np.array([0.0, RADIUS * OMEGA, 0.0])  # tangential velocity
 
-    # Tuned NMPC parameters for high-precision tracking
+    # Tuned NMPC parameters for high-precision circular tracking
+    # Q_pos=20000, R=0.005 is the saturation point — further increase
+    # does not improve RMSE due to IPOPT conditioning limits.
     nmpc_kwargs = dict(
         N=20,
         Q=np.diag([
-            10000, 10000, 15000,    # position (5x baseline)
-            1000, 1000, 1500,       # velocity (5x)
+            20000, 20000, 30000,    # position
+            2000, 2000, 3000,       # velocity
             0, 0, 0, 0,             # quaternion (via attitude_weight)
-            100, 100, 50,           # angular velocity (5x)
-            2500, 2500,             # joints (5x)
-            50, 50,                 # joint velocities (5x)
+            200, 200, 100,          # angular velocity
+            5000, 5000,             # joints
+            100, 100,               # joint velocities
         ]),
-        R=np.diag([0.01, 0.01, 0.01, 0.01, 0.005, 0.005]),
-        attitude_weight=5000.0,
+        R=np.diag([0.005, 0.005, 0.005, 0.005, 0.0025, 0.0025]),
+        attitude_weight=10000.0,
         terminal_weight=10.0,
         ipopt_max_iter=100,
-        ipopt_tol=1e-8,
+        ipopt_tol=1e-10,
     )
 
     runner = SimulationRunner(config, nmpc_kwargs=nmpc_kwargs)
@@ -99,6 +102,18 @@ def main():
     plotter.plot_control_inputs(save_path=output.simulation_image("circle_controls"))
     plotter.plot_3d_trajectory(save_path=output.simulation_image("circle_trajectory_3d"))
     print("\nPlots saved to output/simulations/images/")
+
+    # Animation
+    print("Generating animation...")
+    animator = Animator(logger, fps=config.animation_fps)
+    animator.create_animation(
+        arm_length=config.quadrotor.arm_length,
+        link1_length=config.manipulator.link1.length,
+        link2_length=config.manipulator.link2.length,
+        attachment_offset=config.manipulator.attachment_offset,
+        save_path=output.simulation_animation("circle_tracking"),
+    )
+    print("Animation saved to output/simulations/animations/")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-04-09
+
+### Changed
+- **NMPC**: Per-example optimal Q/R tuning (Ex02: Q_pos=20k/R=0.005, Ex03: Q_pos=50k/R=0.001)
+- **NMPC**: IPOPT tolerance tightened to 1e-10, max iterations increased
+- **NMPC**: DLL hash excludes horizon N (reuse compiled DLL across different horizons)
+- **NMPC**: CasADi CSE (Common Subexpression Elimination) applied to SX graph (~8.9% reduction)
+- **NMPC**: `n_substeps` support for prediction model (configurable RK4 subdivision)
+
+### Added
+- **Docs**: `docs/THEORY.md` — 1,581 lines of complete, unabridged mathematical derivations
+- **Docs**: Academic-style control block diagram (summing junctions, ZOH, feedback paths)
+- **Visualization**: Example 02 circular trajectory 3D animation (GIF)
+- **Performance**: Reference trajectory caching in simulation loop (eliminates redundant calls)
+- **API**: `SimulationRunner(nmpc_kwargs=...)` for external NMPC parameter injection
+
+### Fixed
+- **Tests**: Energy conservation using full potential (arm link heights included)
+- **Tests**: Momentum conservation tolerance for body ≠ COM velocity distinction
+- **Tests**: Step size sensitivity guard for machine-epsilon-exact systems
+- **Docs**: LaTeX `\text{}` with Korean → `\mathrm{}` ASCII for GitHub rendering
+
+### Performance
+- Circle Position RMSE: 3.49mm (default) → **1.22mm** (tuned, -65%)
+- Arm Position RMSE: 8.73mm (PID) → 3.36mm (SDRE) → **1.55mm** (NMPC tuned, -95% vs PID)
+- Arm Max Attitude Error: 4.8° (PID) → **0.35°** (NMPC tuned, -93%)
+
 ## [0.3.0] - 2026-04-09
 
 ### Changed

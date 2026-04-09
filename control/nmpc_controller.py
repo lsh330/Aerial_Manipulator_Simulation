@@ -438,9 +438,11 @@ class NMPCController:
         # Use DM slice indexing to extract only the u block before converting
         # to numpy — avoids converting the full (477,) vector just to slice.
         _u_start = nx * (N + 1)
-        u_opt = np.asarray(sol_x[_u_start: _u_start + nu]).ravel()
-        self._u_prev = u_opt
-        return u_opt
+        u0 = np.asarray(sol_x[_u_start: _u_start + nu]).ravel()
+        u1 = np.asarray(sol_x[_u_start + nu: _u_start + 2 * nu]).ravel()
+        self._u_prev = u0
+        self._u_next = u1
+        return u0
 
     def _build_ref_state(self, ref: dict) -> np.ndarray:
         pos = np.asarray(ref.get("position", np.zeros(3)))

@@ -79,22 +79,23 @@ def main():
     config = SimulationConfig.from_yaml()
     config.duration = 10.0
 
-    # Tuned NMPC parameters for high-precision tracking
+    # Tuned NMPC parameters for arm motion — more aggressive Q/R
+    # to compensate for coupled dynamics disturbances.
     nmpc_kwargs = dict(
         N=20,
         Q=np.diag([
-            10000, 10000, 15000,    # position (5x baseline)
-            1000, 1000, 1500,       # velocity (5x)
+            50000, 50000, 80000,    # position (25x baseline)
+            5000, 5000, 8000,       # velocity
             0, 0, 0, 0,             # quaternion (via attitude_weight)
-            100, 100, 50,           # angular velocity (5x)
-            2500, 2500,             # joints (5x)
-            50, 50,                 # joint velocities (5x)
+            500, 500, 200,          # angular velocity
+            10000, 10000,           # joints
+            200, 200,               # joint velocities
         ]),
-        R=np.diag([0.01, 0.01, 0.01, 0.01, 0.005, 0.005]),
-        attitude_weight=5000.0,
-        terminal_weight=10.0,
-        ipopt_max_iter=100,
-        ipopt_tol=1e-8,
+        R=np.diag([0.001, 0.001, 0.001, 0.001, 0.0005, 0.0005]),
+        attitude_weight=20000.0,
+        terminal_weight=20.0,
+        ipopt_max_iter=200,
+        ipopt_tol=1e-10,
     )
 
     runner = SimulationRunner(config, nmpc_kwargs=nmpc_kwargs)
