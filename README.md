@@ -58,7 +58,7 @@ x = \begin{bmatrix} p \\ v \\ \mathbf{q} \\ \omega \\ q_j \\ \dot{q}_j \end{bmat
 
 ### 4. 쿼터니언 대수
 
-Hamilton convention에서 단위 쿼터니언 $\mathbf{q} = [w, x, y, z]^T$ 에 대응하는 회전 행렬 ($SO(3)$):
+Hamilton convention에서 단위 쿼터니언 $\mathbf{q} = [w, x, y, z]^T$ 에 대응하는 회전 행렬 — $SO(3)$ :
 
 ```math
 R(\mathbf{q}) = \begin{bmatrix}
