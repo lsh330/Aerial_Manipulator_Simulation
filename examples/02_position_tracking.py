@@ -61,7 +61,25 @@ def main():
     config.initial_position = np.array([RADIUS, 0.0, ALTITUDE])
     config.initial_velocity = np.array([0.0, RADIUS * OMEGA, 0.0])  # tangential velocity
 
-    runner = SimulationRunner(config)
+    # Tuned NMPC parameters for high-precision tracking
+    nmpc_kwargs = dict(
+        N=20,
+        Q=np.diag([
+            10000, 10000, 15000,    # position (5x baseline)
+            1000, 1000, 1500,       # velocity (5x)
+            0, 0, 0, 0,             # quaternion (via attitude_weight)
+            100, 100, 50,           # angular velocity (5x)
+            2500, 2500,             # joints (5x)
+            50, 50,                 # joint velocities (5x)
+        ]),
+        R=np.diag([0.01, 0.01, 0.01, 0.01, 0.005, 0.005]),
+        attitude_weight=5000.0,
+        terminal_weight=10.0,
+        ipopt_max_iter=100,
+        ipopt_tol=1e-8,
+    )
+
+    runner = SimulationRunner(config, nmpc_kwargs=nmpc_kwargs)
     print("Running circular trajectory tracking...")
     logger = runner.run(circular_reference, progress_callback=lambda p: print(f"  {p*100:.0f}%"))
 

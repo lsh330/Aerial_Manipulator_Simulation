@@ -6,20 +6,23 @@ nmpc:
   horizon: 20                       # prediction horizon steps (N)
   dt_mpc: 0.02                      # MPC time step [s]
 
-  # State cost Q diagonal (17-element state)
-  Q_position: [2000, 2000, 3000]    # [x, y, z] position tracking weight
-  Q_velocity: [200, 200, 300]       # [vx, vy, vz]
+  # State cost Q diagonal (17-element state) — tuned for high-precision tracking
+  Q_position: [10000, 10000, 15000] # [x, y, z] position tracking weight
+  Q_velocity: [1000, 1000, 1500]    # [vx, vy, vz]
   Q_quaternion: [0, 0, 0, 0]       # not directly penalized (use quaternion error)
-  Q_angular_vel: [20, 20, 10]      # [wx, wy, wz]
-  Q_joints: [500, 500]             # [q1, q2] joint angle tracking
-  Q_joint_vel: [10, 10]            # [qd1, qd2]
+  Q_angular_vel: [100, 100, 50]    # [wx, wy, wz]
+  Q_joints: [2500, 2500]           # [q1, q2] joint angle tracking
+  Q_joint_vel: [50, 50]            # [qd1, qd2]
 
   # Attitude error weight (quaternion-based, separate from Q)
-  attitude_weight: 1000             # penalizes quaternion imaginary part error
+  attitude_weight: 5000             # penalizes quaternion imaginary part error
+
+  # Terminal cost multiplier (terminal_weight × stage cost)
+  terminal_weight: 10.0
 
   # Input cost R diagonal (6-element input)
-  R_motors: [0.1, 0.1, 0.1, 0.1]  # motor thrust penalty (low = aggressive)
-  R_joints: [0.05, 0.05]           # joint torque penalty
+  R_motors: [0.01, 0.01, 0.01, 0.01]  # motor thrust penalty (low = aggressive)
+  R_joints: [0.005, 0.005]             # joint torque penalty
 
   # Actuator limits
   motor_thrust_max: 12.3           # [N] per motor (k_f * omega_max^2)

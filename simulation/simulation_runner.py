@@ -13,7 +13,7 @@ from analysis.data_logger import DataLogger
 class SimulationRunner:
     """Mediator that orchestrates engine, controllers, logger, and time management."""
 
-    def __init__(self, config: SimulationConfig) -> None:
+    def __init__(self, config: SimulationConfig, nmpc_kwargs: dict | None = None) -> None:
         self.config = config
         self.time_mgr = TimeManager(config.dt, config.duration, config.log_interval)
         self.logger = DataLogger()
@@ -28,7 +28,8 @@ class SimulationRunner:
         # Build controllers
         from control.nmpc_controller import NMPCController
         self.nmpc_ctrl = NMPCController(
-            config.quadrotor, config.manipulator, config.environment)
+            config.quadrotor, config.manipulator, config.environment,
+            **(nmpc_kwargs or {}))
 
     def run(
         self,
@@ -68,6 +69,12 @@ class SimulationRunner:
         advance = self.time_mgr.advance
         compute_control = self.nmpc_ctrl.compute_control
 
+        # _ref_cache holds the most recently evaluated reference dict so that the
+        # logging branch can reuse it when it coincides with an NMPC solve step,
+        # avoiding a redundant reference_trajectory() call.
+        _ref_cache: Optional[dict] = None
+        _ref_cache_t: float = -1.0
+
         while not self.time_mgr.is_finished():
             t = self.time_mgr.t
 
@@ -75,14 +82,21 @@ class SimulationRunner:
             if _nmpc_input_cache is None or _nmpc_counter % nmpc_interval == 0:
                 ref = reference_trajectory(t)
                 ref["_t"] = t
+                _ref_cache = ref
+                _ref_cache_t = t
                 _nmpc_input_cache = compute_control(state.data, ref, dt)
             _nmpc_counter += 1
             input_vec = _nmpc_input_cache
 
-            # ── Log data (reference always fresh for current time) ──
+            # ── Log data (reuse NMPC ref when on same timestep) ──
             if should_log():
-                ref = reference_trajectory(t)
-                log_on_step(t, state.data, input_vec, ref)
+                if _ref_cache_t == t:
+                    ref_log = _ref_cache
+                else:
+                    ref_log = reference_trajectory(t)
+                    _ref_cache = ref_log
+                    _ref_cache_t = t
+                log_on_step(t, state.data, input_vec, ref_log)
 
             # ── Dynamics integration ──
             state = system_step(t, state, input_vec, dt)
