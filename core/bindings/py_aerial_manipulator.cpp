@@ -205,8 +205,10 @@ PYBIND11_MODULE(_core, m) {
              "Construct the coupled system from component parameter structs.")
         .def("compute_state_derivative", &AerialManipulatorSystem::compute_state_derivative,
              py::arg("state"), py::arg("input"),
+             py::call_guard<py::gil_scoped_release>(),
              "Compute dx/dt = f(x, u). Returns 17-D state derivative vector.\n"
-             "Quaternion in state is normalised internally before use.")
+             "Quaternion in state is normalised internally before use.\n"
+             "GIL is released during C++ computation for thread safety.")
         .def("compute_mass_matrix", &AerialManipulatorSystem::compute_mass_matrix,
              py::arg("state"),
              "Compute coupled 8x8 mass matrix M(q) in generalised coordinates.")
@@ -222,9 +224,11 @@ PYBIND11_MODULE(_core, m) {
              "Compute configuration-dependent input matrix B(q) (8x6).")
         .def("step", &AerialManipulatorSystem::step,
              py::arg("t"), py::arg("state"), py::arg("input"), py::arg("dt"),
+             py::call_guard<py::gil_scoped_release>(),
              "Advance state by dt [s] using the current integrator.\n"
              "Returns new 17-D state with quaternion normalised.\n"
-             "Raises RuntimeError if no integrator has been set.")
+             "Raises RuntimeError if no integrator has been set.\n"
+             "GIL is released during C++ computation for thread safety.")
         .def("set_integrator", &AerialManipulatorSystem::set_integrator,
              py::arg("integrator"),
              "Set the numerical integrator (RK4Integrator or RKF45Integrator).")

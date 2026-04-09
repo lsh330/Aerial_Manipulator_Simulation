@@ -34,6 +34,10 @@ class DataLogger:
 
         if reference:
             for key, val in reference.items():
+                # Skip internal bookkeeping keys (e.g. "_t" injected by
+                # simulation_runner for NMPC reference caching).
+                if key.startswith("_"):
+                    continue
                 if key not in self._references:
                     self._references[key] = np.zeros((self._capacity, np.asarray(val).size))
                 arr = self._references[key]

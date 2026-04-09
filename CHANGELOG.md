@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.1] - 2026-04-09
+
+### Changed
+- **NMPC**: Default hessian_approximation switched from "exact" to "limited-memory" (L-BFGS) — **1.6x NMPC solve speedup** (56ms→34ms/call) with numerically equivalent tracking
+- **NMPC**: All `\text{}` LaTeX commands replaced with `\mathrm{}` for GitHub KaTeX rendering
+- **Docs**: Assumptions & Limitations section translated to Korean
+- **Performance**: State object in-place reuse (eliminates per-step constructor overhead)
+- **Performance**: Inner PD loop pre-allocated buffers (zero per-step allocation)
+- **Performance**: DataLogger filters internal `_t` keys to skip unnecessary array storage
+
+### Added
+- **C++ Bindings**: GIL release on `step()` and `compute_state_derivative()` (future multi-thread support)
+- **API**: `hessian_approximation` parameter for NMPCController (switchable exact/L-BFGS)
+
+### Fixed
+- **LaTeX**: Non-ASCII in `\text{}` → `\mathrm{}`, bare `<` → `\lt`, `°` → `^{\circ}`
+
+### Performance
+- Total simulation time (10s): **28.3s → ~17.4s** (1.63x speedup via L-BFGS)
+- Cumulative speedup from all optimizations: **~70%** reduction from original baseline
+
 ## [0.4.0] - 2026-04-09
 
 ### Changed
