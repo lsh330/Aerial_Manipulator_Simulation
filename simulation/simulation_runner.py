@@ -69,11 +69,30 @@ class SimulationRunner:
         advance = self.time_mgr.advance
         compute_control = self.nmpc_ctrl.compute_control
 
+        # ── Inner PD attitude correction (multi-rate: 1kHz between NMPC 50Hz) ──
+        # Compensates for inter-sample attitude disturbances from arm coupling.
+        # Extracts desired quaternion from NMPC reference and applies proportional
+        # correction to body torques via mixing matrix inverse.
+        L = self.config.quadrotor.arm_length
+        k_ratio = self.config.quadrotor.torque_coeff / self.config.quadrotor.thrust_coeff
+        # Mixing matrix inverse (maps [F, τ_r, τ_p, τ_y] → [f1, f2, f3, f4])
+        A = np.array([
+            [1.0,  1.0,  1.0,  1.0],
+            [0.0, -L,    0.0,  L  ],
+            [L,    0.0, -L,    0.0],
+            [k_ratio, -k_ratio, k_ratio, -k_ratio],
+        ])
+        A_inv = np.linalg.inv(A)
+        # PD gains (tuned conservatively to avoid NMPC interference)
+        Kp_att = np.array([3.0, 3.0, 1.5])   # [roll, pitch, yaw] proportional
+        Kd_att = np.array([1.0, 1.0, 0.3])   # damping
+
         # _ref_cache holds the most recently evaluated reference dict so that the
         # logging branch can reuse it when it coincides with an NMPC solve step,
         # avoiding a redundant reference_trajectory() call.
         _ref_cache: Optional[dict] = None
         _ref_cache_t: float = -1.0
+        _quat_des = np.array([1.0, 0.0, 0.0, 0.0])  # desired quaternion
 
         while not self.time_mgr.is_finished():
             t = self.time_mgr.t
@@ -85,8 +104,38 @@ class SimulationRunner:
                 _ref_cache = ref
                 _ref_cache_t = t
                 _nmpc_input_cache = compute_control(state.data, ref, dt)
+                # Extract desired quaternion from NMPC predicted next state
+                sol_x = self.nmpc_ctrl._sol_prev
+                if sol_x is not None:
+                    x1 = np.asarray(sol_x[17:34]).ravel()
+                    _quat_des = x1[6:10]
+                    _quat_des /= np.linalg.norm(_quat_des)
+
+            # ── Inner PD correction at 1kHz ──
+            quat = state.data[6:10]
+            omega = state.data[10:13]
+            # Quaternion error: q_err = q_des^* ⊗ q
+            qw, qx, qy, qz = _quat_des
+            pw, px, py, pz = quat
+            q_err = np.array([
+                qw*pw + qx*px + qy*py + qz*pz,    # w
+                qw*px - qx*pw - qy*pz + qz*py,     # x
+                qw*py + qx*pz - qy*pw - qz*px,     # y
+                qw*pz - qx*py + qy*px - qz*pw,     # z
+            ])
+            # Sign correction for shortest-path rotation
+            if q_err[0] < 0:
+                q_err = -q_err
+            # PD torque correction (body frame)
+            tau_corr = Kp_att * q_err[1:4] + Kd_att * (-omega)
+            # Map correction to motor thrusts: Δf = A_inv @ [0, τ_r, τ_p, τ_y]
+            delta_f = A_inv @ np.array([0.0, tau_corr[0], tau_corr[1], tau_corr[2]])
+            # Apply correction
+            input_vec = _nmpc_input_cache.copy()
+            input_vec[:4] += delta_f
+            input_vec[:4] = np.clip(input_vec[:4], 0.0, 12.3)
+            input_vec[4:] = np.clip(input_vec[4:], -5.0, 5.0)
             _nmpc_counter += 1
-            input_vec = _nmpc_input_cache
 
             # ── Log data (reuse NMPC ref when on same timestep) ──
             if should_log():
